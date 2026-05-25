@@ -1,0 +1,6 @@
+eyed3>=0.9.7
+mutagen>=1.47.0
+Pillow>=11.0.0
+pygame>=2.6.0
+Send2Trash>=1.8.3
+tkinterdnd2>=0.3.0
