@@ -1,4 +1,5 @@
 import os
+import re
 
 from .file_service import sanitize_filename
 
@@ -18,12 +19,17 @@ def _track_number(metadata: dict[str, object], fallback: int = 0) -> int:
 
 def _filename_parts(filename: str) -> tuple[str, str]:
     stem, _extension = os.path.splitext(filename)
+    stem = _strip_leading_track_prefix(stem)
     parts = [part.strip() for part in stem.split(" - ") if part.strip()]
     if len(parts) >= 3 and parts[0].isdigit():
         return parts[1], " - ".join(parts[2:])
     if len(parts) >= 2:
         return parts[0], " - ".join(parts[1:])
     return "", stem.strip()
+
+
+def _strip_leading_track_prefix(value: str) -> str:
+    return re.sub(r"^\s*\d{1,4}\s*(?:[-._)]\s*|\s+)", "", value).strip()
 
 
 def playlist_base_name(

@@ -22,6 +22,7 @@ METADATA_FIELDS: list[MetadataField] = [
 class MetadataDialogController:
     def __init__(self, translator: Callable[..., str]) -> None:
         self.t = translator
+        self.fields = METADATA_FIELDS
 
     def set_translator(self, translator: Callable[..., str]) -> None:
         self.t = translator

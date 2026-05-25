@@ -1,7 +1,7 @@
 import unittest
 
 from app.models import FilterMode, SortMode, TrackInfo
-from app.services.library_service import filter_files, quality_report, sort_files
+from app.services.library_service import filter_files, natural_filename_key, quality_report, sort_files
 
 
 def track(filename: str, metadata: dict[str, str], duration: float = 0.0) -> TrackInfo:
@@ -75,6 +75,25 @@ class LibraryServiceTests(unittest.TestCase):
             sort_files(self.files, self.cache, SortMode.MANUAL, lambda _name: 0.0),
             self.files,
         )
+
+    def test_sort_files_uses_natural_filename_order_for_numeric_prefixes(self):
+        files = [
+            "100 - C. Tangana - Los Tontos.mp3",
+            "09 - The Strokes - Selfless.mp3",
+            "10 - Enjambre - Necropolis.mp3",
+            "11 - Otra.mp3",
+        ]
+
+        self.assertEqual(
+            sort_files(files, {}, SortMode.FILENAME, lambda _name: 0.0),
+            [
+                "09 - The Strokes - Selfless.mp3",
+                "10 - Enjambre - Necropolis.mp3",
+                "11 - Otra.mp3",
+                "100 - C. Tangana - Los Tontos.mp3",
+            ],
+        )
+        self.assertLess(natural_filename_key("2 - a.mp3"), natural_filename_key("10 - a.mp3"))
 
     def test_filter_files_searches_metadata_and_special_filters(self):
         self.assertEqual(filter_files(self.files, self.cache, "last"), ["d.mp3"])

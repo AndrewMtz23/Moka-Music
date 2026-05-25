@@ -28,9 +28,27 @@ python main.py
 1. Abre una carpeta en `Biblioteca principal` y, si hace falta, otra en `Biblioteca entrante`.
 2. Selecciona una o varias canciones para previsualizar portada y metadatos.
 3. Usa `Editar metadata...` para modificar una cancion o aplicar campos seleccionados a varias.
-4. Usa las acciones rapidas para limpiar nombres, numerar pistas o copiar artista a artista album.
-5. Reproduce la seleccion con el panel inferior y revisa tiempo, progreso, volumen y modo de reproduccion.
-6. Antes de cambios masivos, la app genera respaldos que puedes restaurar desde `Herramientas`.
+4. En `Biblioteca entrante`, usa `Metadatos globales` para preparar musica nueva antes de moverla a la playlist principal.
+5. Usa `Preparar playlist` para numerar pistas y renombrar archivos con el formato `001 - Artista - Titulo`.
+6. Reproduce la seleccion con el panel inferior y revisa tiempo, progreso, volumen y modo de reproduccion.
+7. Antes de cambios masivos, la app genera respaldos que puedes restaurar desde `Herramientas`.
+
+## Preparar playlist
+
+El flujo de playlist esta pensado para evitar renumerar y renombrar a mano:
+
+1. Carga tu playlist curada en `Biblioteca principal` o canciones nuevas en `Biblioteca entrante`.
+2. Acomoda el orden visual de las canciones.
+3. Usa `Insertar en posicion...` si quieres mover una o varias canciones a una posicion concreta.
+4. Usa `Preparar playlist` para aplicar el orden completo.
+
+`Preparar playlist` hace todo junto: crea respaldo, actualiza `track_number`, renombra archivos y refresca la biblioteca. El nombre final queda:
+
+```text
+001 - Artista - Titulo.mp3
+```
+
+Si falta metadata de artista o titulo, la app intenta inferirla desde nombres existentes como `Artista - Titulo.mp3`.
 
 ## Funciones principales
 
@@ -38,6 +56,8 @@ python main.py
 - Busqueda por nombre o metadata y filtros por campos faltantes, canciones sin portada y duplicadas.
 - Lista organizada con seleccion multiple y orden manual.
 - Reordenar canciones con drag and drop y numerar pistas segun el orden actual.
+- Preparar playlist con preview: orden actual, `track_number` y renombrado fisico a `001 - Artista - Titulo`.
+- Insertar canciones en una posicion concreta y recorrer automaticamente las demas.
 - Ordenar por nombre, artista, album, numero de pista, duracion o fecha.
 - Vista previa compacta con portada, titulo, artista, artista album, album, ano, genero, pista y comentario.
 - Edicion individual y edicion por lotes con previsualizacion antes/despues.
@@ -46,13 +66,14 @@ python main.py
   - Quitar texto entre parentesis o corchetes.
   - Conservar solo titulo.
   - Crear titulo desde nombre de archivo.
-  - Numerar pistas segun el orden visible.
+  - Preparar playlist segun el orden visible.
+  - Insertar canciones en una posicion.
   - Copiar artista a artista album.
   - Renombrar archivos desde metadata.
   - Buscar portada automaticamente desde la carpeta.
 - Presets personalizados para guardar varias acciones de limpieza y aplicarlas juntas.
 - Eliminar metadata con modal para elegir que campos conservar.
-- Gestion de caratulas: arrastra una imagen JPG o PNG sobre la portada para incrustarla.
+- Gestion de caratulas: arrastra una imagen JPG o PNG sobre la portada para guardarla como `PORTADA.jpg` y aplicarla a la carpeta de la cancion activa.
 - Mover canciones entre carpetas, agregar canciones, renombrar y eliminar con envio seguro a papelera cuando esta disponible.
 - Reproductor integrado con play/pausa, detener, anterior, siguiente, repetir, aleatorio, salto de 10s, volumen, barra de progreso, tiempo y visualizador.
 - Temas claro/oscuro e idioma Espanol/Ingles.

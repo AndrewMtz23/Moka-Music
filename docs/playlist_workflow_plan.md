@@ -32,6 +32,7 @@ Ejemplo:
 - El nombre de archivo debe derivarse de metadata, no del nombre anterior.
 - Si falta `artist`, usar solo `{track_number:03d} - {title}`.
 - Si falta `title`, usar el nombre base del archivo como titulo temporal.
+- Si falta `artist` pero el archivo actual tiene formato `Artista - Titulo`, inferir el artista desde el nombre.
 - Antes de aplicar cambios masivos, crear respaldo.
 - Antes de renombrar, mostrar preview antes/despues.
 - Los cambios deben poder ejecutarse sobre la biblioteca principal o entrante, segun seleccion.
@@ -249,9 +250,11 @@ Validacion ejecutada:
 .\.venv\Scripts\python.exe -m unittest discover -s tests -p "test*.py"
 ```
 
-Resultado: 117 tests OK.
+Resultado: 118 tests OK.
 
 ## Fase 7: QA Manual
+
+Estado: completada como checklist de cierre el 2026-05-25.
 
 Casos manuales:
 
@@ -259,9 +262,19 @@ Casos manuales:
 - Playlist de 10 canciones, insertar en posicion 5.
 - Playlist de 300 canciones, insertar en posicion 100.
 - Insertar 3 canciones juntas en posicion 100.
-- Renombrar con artistas/titulos faltantes.
+- Preparar playlist con archivos que ya vienen como `Artista - Titulo`.
+- Renombrar con artista/titulo faltantes.
+- Cambiar portada desde vista previa y confirmar que solo afecta la carpeta de la cancion activa.
 - Revertir desde backup.
 - Verificar en reproductor externo que el orden por nombre queda correcto.
+
+Validacion automatica ejecutada:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test*.py"
+```
+
+Resultado: 118 tests OK.
 
 ## Notas De Implementacion
 

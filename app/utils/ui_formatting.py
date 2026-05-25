@@ -84,6 +84,8 @@ def backup_action_label(metadata, t: Callable[..., str]) -> str:
         return t(QUICK_ACTION_LABEL_KEYS.get(str(metadata.get("quick_action")), "quick_actions.title"))
     if "quick_preset" in metadata:
         return t("backup.action_preset", name=str(metadata.get("quick_preset", "")))
+    if metadata.get("metadata_clear") == "folder":
+        return t("metadata_clear.title")
     if metadata.get("track_number") == "order":
         return t("quick_actions.number_tracks")
     if "__cover__" in metadata:

@@ -63,7 +63,7 @@ class PlaylistWorkflowController:
             filename: index
             for index, filename in enumerate(original_order, start=1)
         }
-        track_numbers = renumber_order(final_order)
+        track_numbers = renumber_order(final_order, start=0)
         used_names: set[str] = set()
         items: list[PlaylistPlanItem] = []
 

@@ -101,6 +101,15 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         self.top_library_panel.pack(fill="both", expand=True)
 
         self.top_metadata_panel = ttk.Frame(top_area)
+        metadata_toolbar = ttk.Frame(self.top_metadata_panel)
+        metadata_toolbar.pack(fill="x", pady=(0, 4))
+        self.back_to_libraries_button = ttk.Button(
+            metadata_toolbar,
+            text=self.t("button.back_to_libraries"),
+            command=self._toggle_global_metadata_view,
+            style="Secondary.TButton",
+        )
+        self.back_to_libraries_button.pack(side="right")
 
         self._setup_music_panel(self.top_library_panel, self.controller_principal, "panel.main_library", is_main=True)
         self._setup_music_panel(self.top_library_panel, self.controller_nueva, "panel.incoming_library", is_main=False)
@@ -144,12 +153,10 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         if active:
             self.top_library_panel.pack_forget()
             self.top_metadata_panel.pack(fill="both", expand=True)
-            self.global_metadata_toggle_button.configure(text=self.t("button.back_to_libraries"))
             return
 
         self.top_metadata_panel.pack_forget()
         self.top_library_panel.pack(fill="both", expand=True)
-        self.global_metadata_toggle_button.configure(text=self.t("button.global_metadata"))
 
     def _setup_music_panel(self, parent, controller: MetadataController, title_key: str, *, is_main: bool) -> None:
         bundle = build_library_panel(
@@ -174,8 +181,11 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
                 if is_main
                 else lambda _controller, _tree: self._move_to_main()
             ),
+            on_clear_folder=self._clear_library_folder,
             extra_action_text="" if is_main else self.t("button.global_metadata"),
             on_extra_action=None if is_main else self._toggle_global_metadata_view,
+            second_extra_action_text="" if is_main else self.t("button.prepare_folder"),
+            on_second_extra_action=None if is_main else self._show_incoming_folder_guide,
         )
 
         self._library_panels.append(bundle.panel_state(controller))
@@ -185,6 +195,7 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         prefix = "main" if is_main else "incoming"
         self._ui_text_widgets[f"{prefix}_library_frame"] = bundle.frame
         self._ui_text_widgets[f"{prefix}_select_folder"] = bundle.select_button
+        self._ui_text_widgets[f"{prefix}_close_folder"] = bundle.clear_button
         self._ui_text_widgets[f"{prefix}_search_label"] = bundle.search_label
         self._ui_text_widgets[f"{prefix}_filter_label"] = bundle.filter_label
 
@@ -196,6 +207,9 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
             self._ui_text_widgets["move_to_main_button"] = bundle.action_button
             if bundle.extra_button is not None:
                 self.global_metadata_toggle_button = bundle.extra_button
+                self._ui_text_widgets["incoming_global_metadata_button"] = bundle.extra_button
+            if bundle.second_extra_button is not None:
+                self._ui_text_widgets["incoming_prepare_folder_button"] = bundle.second_extra_button
 
     def _setup_metadata_panel(self, parent) -> None:
         bundle = build_metadata_panel(

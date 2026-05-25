@@ -49,6 +49,22 @@ class LibraryWorkflowMixin:
             self.logger.error("Error loading folder: %s", exc)
             messagebox.showerror(self.t("dialog.error"), self.t("message.could_not_load_folder", error=exc))
 
+    def _clear_library_folder(self, controller: MetadataController, tree) -> None:
+        if not controller.carpeta and not controller.archivos:
+            return
+        if controller is self._preview_controller:
+            self._preview_controller = None
+            self._preview_filename = None
+            self.preview.clear_preview()
+        if controller is self._playback_controller:
+            self._playback_controller = None
+            self._playback_tree = None
+            self.player.stop()
+        controller.clear_library()
+        tree.selection_clear(0, "end")
+        self._refresh_library_tree(controller, tree)
+        self._save_config()
+
     def _update_treeview(self, tree, files: list[str]) -> None:
         panel_name = self._library_debug_name(self._controller_for_tree(tree), tree)
         self.logger.debug("[%s] Updating list widget with %s files", panel_name, len(files))
@@ -240,10 +256,16 @@ class LibraryWorkflowMixin:
         selection = tree.selection()
         if not selection:
             return
+        self._clear_other_library_selection(tree)
         item = tree.item(selection[0])
         filename = self._filename_from_tree_item(item)
         if filename:
             self._load_song_preview(controller, filename)
+
+    def _clear_other_library_selection(self, active_tree) -> None:
+        for tree in (getattr(self, "tree_principal", None), getattr(self, "tree_nueva", None)):
+            if tree is not None and tree is not active_tree:
+                tree.selection_clear(0, "end")
 
     def _load_song_preview(self, controller: MetadataController, filename: str) -> None:
         if not controller.carpeta or not filename:

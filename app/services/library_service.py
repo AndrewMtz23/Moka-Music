@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 from typing import Callable
 
 from app.models import FilterMode, SortMode, TrackInfo
@@ -12,7 +13,7 @@ def sort_files(files: list[str], metadata_cache: MetadataCache, mode: SortMode, 
     if mode == SortMode.MANUAL:
         return sorted_files
     if mode == SortMode.FILENAME:
-        sorted_files.sort(key=lambda value: value.lower())
+        sorted_files.sort(key=natural_filename_key)
     elif mode == SortMode.ARTIST:
         sorted_files.sort(key=lambda value: metadata_sort_value(value, metadata_cache, "artist"))
     elif mode == SortMode.ALBUM:
@@ -29,6 +30,11 @@ def sort_files(files: list[str], metadata_cache: MetadataCache, mode: SortMode, 
 def metadata_sort_value(filename: str, metadata_cache: MetadataCache, field: str) -> tuple[str, str]:
     metadata = metadata_for(filename, metadata_cache)
     return (str(metadata.get(field, "") or "").lower(), filename.lower())
+
+
+def natural_filename_key(filename: str) -> tuple[object, ...]:
+    parts = re.split(r"(\d+)", filename.lower())
+    return tuple(int(part) if part.isdigit() else part for part in parts)
 
 
 def duration(filename: str, metadata_cache: MetadataCache) -> float:

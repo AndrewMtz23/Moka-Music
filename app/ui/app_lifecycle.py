@@ -264,8 +264,9 @@ class AppLifecycleMixin:
         )
         self._refresh_cleanup_preset_menu()
         if hasattr(self, "global_metadata_toggle_button"):
-            key = "button.back_to_libraries" if getattr(self, "_global_metadata_view_active", False) else "button.global_metadata"
-            self.global_metadata_toggle_button.configure(text=self.t(key))
+            self.global_metadata_toggle_button.configure(text=self.t("button.global_metadata"))
+        if hasattr(self, "back_to_libraries_button"):
+            self.back_to_libraries_button.configure(text=self.t("button.back_to_libraries"))
 
     def _install_search_placeholder(self, entry, variable) -> None:
         panel = self._get_library_panel_for_search(variable)

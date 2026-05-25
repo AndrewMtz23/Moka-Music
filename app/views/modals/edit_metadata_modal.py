@@ -41,6 +41,11 @@ def request_metadata_edit(
 
     apply_vars: dict[str, tk.BooleanVar] = {}
     edit_vars: dict[str, tk.StringVar] = {}
+
+    def mark_field_for_apply(field: str) -> None:
+        if field in apply_vars:
+            apply_vars[field].set(True)
+
     start_row = 2 if is_batch_edit else 1
     for index, (field, label_key) in enumerate(fields, start=start_row):
         label_column = 1 if is_batch_edit else 0
@@ -61,7 +66,11 @@ def request_metadata_edit(
             pady=4,
         )
         edit_vars[field] = tk.StringVar(value=str(current_song.get(field, "") or ""))
-        ttk.Entry(container, textvariable=edit_vars[field], width=54).grid(
+        entry = ttk.Entry(container, textvariable=edit_vars[field], width=54)
+        if is_batch_edit:
+            entry.bind("<FocusIn>", lambda _event, field=field: mark_field_for_apply(field), add="+")
+            edit_vars[field].trace_add("write", lambda *_args, field=field: mark_field_for_apply(field))
+        entry.grid(
             row=index,
             column=entry_column,
             sticky="ew",

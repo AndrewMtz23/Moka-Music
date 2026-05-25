@@ -61,7 +61,8 @@ class PlaylistOrderServiceTests(unittest.TestCase):
             renumber_order(["a.mp3", "b.mp3", "c.mp3"], start=100),
             {"a.mp3": 100, "b.mp3": 101, "c.mp3": 102},
         )
-        self.assertEqual(renumber_order(["a.mp3"], start="x"), {"a.mp3": 1})
+        self.assertEqual(renumber_order(["a.mp3"], start=0), {"a.mp3": 0})
+        self.assertEqual(renumber_order(["a.mp3"], start="x"), {"a.mp3": 0})
 
 
 if __name__ == "__main__":

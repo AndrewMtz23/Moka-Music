@@ -12,7 +12,8 @@ from ..utils.ui_formatting import metadata_label_key
 from ..views.modals.backup_history_modal import show_backup_history_modal
 from ..views.modals.change_preview_modal import confirm_change_preview
 from ..views.modals.cleanup_preset_modal import show_cleanup_preset_modal
-from ..views.modals.playlist_insert_preview_modal import confirm_playlist_insert_preview
+from ..views.modals.clear_metadata_modal import KEEP_FIELDS_KEY
+from ..views.modals.playlist_insert_preview_modal import request_playlist_insert_preview
 from ..views.modals.rename_metadata_modal import confirm_rename_metadata
 
 
@@ -208,10 +209,80 @@ class MetadataWorkflowMixin:
             messagebox.showwarning(self.t("dialog.selection"), self.t("preview.no_active_song"))
             return
 
+        clear_folder = messagebox.askyesnocancel(
+            self.t("metadata_clear.scope_title"),
+            self.t("metadata_clear.scope_prompt"),
+        )
+        if clear_folder is None:
+            return
+
         metadata = self._metadata_dialog_controller().request_clear(self.root, target.current_song)
         if metadata is None:
             return
+        keep_fields = self._extract_keep_fields(metadata)
+        if clear_folder:
+            self._apply_clear_metadata_to_folder(target, keep_fields)
+            return
         self._apply_metadata_to_preview_target(target, metadata, done_key="metadata_clear.done")
+
+    def _extract_keep_fields(self, metadata: dict[str, str]) -> set[str]:
+        raw_value = str(metadata.pop(KEEP_FIELDS_KEY, "") or "")
+        return {field for field in raw_value.split("|") if field}
+
+    def _apply_clear_metadata_to_folder(self, target, keep_fields: set[str]) -> None:
+        controller = target.controller
+        tree = target.tree
+        filenames = controller.archivos.copy()
+        if not filenames:
+            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
+            return
+        backup_metadata = {
+            "metadata_clear": "folder",
+            "keep_fields": ",".join(sorted(keep_fields)),
+        }
+        if not self._create_metadata_backup_for_groups([(controller, tree, filenames)], backup_metadata):
+            return
+
+        success_count = 0
+        errors: list[str] = []
+        for filename in filenames:
+            cached = controller.get_track_info(filename)
+            current_metadata = dict(cached.metadata) if cached else {}
+            metadata = self._clear_metadata_payload(current_metadata, keep_fields)
+            result = self._metadata_apply_controller().apply_single(
+                controller=controller,
+                tree=tree,
+                filename=filename,
+                metadata=metadata,
+                cover_path=None,
+                song_info=self.song_info,
+            )
+            if result.success:
+                success_count += 1
+            else:
+                errors.extend(result.result.errors or [result.result.message])
+
+        if success_count:
+            self._refresh_library_tree(controller, tree)
+            if self._preview_controller is controller and self._preview_filename:
+                self._load_song_preview(controller, self._preview_filename)
+            message = self.t("metadata_clear.done_count", count=success_count)
+            if errors:
+                message += self.t("message.errors_count", count=len(errors))
+            messagebox.showinfo(self.t("dialog.done"), message)
+            return
+
+        messagebox.showerror(
+            self.t("dialog.error"),
+            "\n".join(errors) if errors else self.t("message.could_not_apply_metadata"),
+        )
+
+    def _clear_metadata_payload(self, current_metadata: dict[str, str], keep_fields: set[str]) -> dict[str, str]:
+        fields = [field for field, _label_key in self._metadata_dialog_controller().fields]
+        return {
+            field: str(current_metadata.get(field, "") or "").strip() if field in keep_fields else ""
+            for field in fields
+        }
 
     def _show_edit_metadata_modal(self) -> None:
         target = self._metadata_apply_controller().preview_target(
@@ -223,44 +294,58 @@ class MetadataWorkflowMixin:
         if not target:
             messagebox.showwarning(self.t("dialog.selection"), self.t("preview.no_active_song"))
             return
-        selections = self._selected_filenames_by_controller()
-        selected_count = self._metadata_apply_controller().selected_count(selections)
-        is_batch_edit = selected_count > 1
+
+        edit_folder = messagebox.askyesnocancel(
+            self.t("metadata_edit.scope_title"),
+            self.t("metadata_edit.scope_prompt"),
+        )
+        if edit_folder is None:
+            return
+
+        groups = (
+            [(target.controller, target.tree, target.controller.archivos.copy())]
+            if edit_folder
+            else [(target.controller, target.tree, [target.filename])]
+        )
+        selected_count = self._metadata_apply_controller().selected_count(groups)
+        if not selected_count:
+            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
+            return
 
         metadata = self._metadata_dialog_controller().request_edit(
             self.root,
             target.current_song,
             selected_count=selected_count,
-            is_batch_edit=is_batch_edit,
+            is_batch_edit=edit_folder,
         )
         if metadata is None:
             return
 
-        if is_batch_edit:
+        if edit_folder:
             validation = target.controller.validar_datos(metadata)
             if not validation.success:
                 messagebox.showwarning(self.t("dialog.metadata"), validation.message)
                 return
-            if not self._confirm_metadata_change_preview(selections, metadata):
+            if not self._confirm_metadata_change_preview(groups, metadata):
                 return
 
-            if not self._create_metadata_backup_for_groups(selections, metadata):
+            if not self._create_metadata_backup_for_groups(groups, metadata):
                 return
 
             result = self._metadata_apply_controller().apply_groups(
-                groups=selections,
+                groups=groups,
                 metadata=metadata,
                 song_info=self.song_info,
                 preview_controller=self._preview_controller,
                 preview_filename=self._preview_filename,
             )
-            self._refresh_changed_library_pairs(selections, result.changed_pairs)
+            self._refresh_changed_library_pairs(groups, result.changed_pairs)
 
             if result.affected_preview and self._preview_controller and self._preview_filename:
                 self._load_song_preview(self._preview_controller, self._preview_filename)
 
             if result.success_count:
-                message = self.t("batch_edit.done", count=result.success_count)
+                message = self.t("metadata_edit.done_count", count=result.success_count)
                 if result.errors:
                     message += self.t("message.errors_count", count=len(result.errors))
                 messagebox.showinfo(self.t("dialog.done"), message)
@@ -651,8 +736,19 @@ class MetadataWorkflowMixin:
         if not plan.items:
             messagebox.showinfo(self.t("dialog.done"), self.t("change_preview.no_changes"))
             return
-        if not confirm_playlist_insert_preview(self.root, self.t, plan):
+        confirmed_plan = request_playlist_insert_preview(
+            self.root,
+            self.t,
+            plan,
+            lambda final_order: self._playlist_workflow_controller().build_plan_from_order(
+                controller=controller,
+                tree=tree,
+                final_order=final_order,
+            ),
+        )
+        if confirmed_plan is None:
             return
+        plan = confirmed_plan
 
         result = self._playlist_workflow_controller().execute_plan(
             plan,
@@ -703,8 +799,19 @@ class MetadataWorkflowMixin:
         if not plan.items:
             messagebox.showinfo(self.t("dialog.done"), self.t("change_preview.no_changes"))
             return
-        if not confirm_playlist_insert_preview(self.root, self.t, plan):
+        confirmed_plan = request_playlist_insert_preview(
+            self.root,
+            self.t,
+            plan,
+            lambda final_order: self._playlist_workflow_controller().build_plan_from_order(
+                controller=controller,
+                tree=tree,
+                final_order=final_order,
+            ),
+        )
+        if confirmed_plan is None:
             return
+        plan = confirmed_plan
 
         result = self._playlist_workflow_controller().execute_plan(
             plan,

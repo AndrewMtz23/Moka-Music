@@ -31,10 +31,10 @@ class LibraryUiController:
         panel: Optional[dict[str, object]],
     ) -> None:
         tree.delete(*tree.get_children())
-        for index, filename in enumerate(files, start=1):
+        for index, filename in enumerate(files):
             display_name = self.song_display_name(controller, filename)
             full_path = os.path.join(controller.carpeta, filename) if controller and controller.carpeta else filename
-            row_tag = "even_row" if index % 2 == 0 else "odd_row"
+            row_tag = "even_row" if (index + 1) % 2 == 0 else "odd_row"
             tree.insert("", "end", text=display_name, values=(index, full_path), tags=(filename, row_tag))
         if not files:
             tree.insert(

@@ -58,6 +58,14 @@ class MetadataController:
             return []
         return self.cargar_archivos_mp3(self.carpeta)
 
+    def clear_library(self) -> None:
+        self.archivos = []
+        self.carpeta = ""
+        self.portada_path = None
+        self._metadata_cache.clear()
+        self._cover_cache.clear()
+        self._sort_mode = SortMode.FILENAME
+
     def register_file(self, filename: str) -> None:
         if filename not in self.archivos:
             self.archivos.append(filename)

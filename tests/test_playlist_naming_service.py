@@ -37,6 +37,26 @@ class PlaylistNamingServiceTests(unittest.TestCase):
             "001 - Victor Mendivil - Mia.mp3",
         )
 
+    def test_strips_old_numeric_prefix_from_filename_artist(self):
+        self.assertEqual(
+            playlist_filename_from_metadata(
+                "08 Soda Stereo - Entre Canibales.mp3",
+                {"track_number": "5"},
+                set(),
+            ),
+            "005 - Soda Stereo - Entre Canibales.mp3",
+        )
+
+    def test_strips_old_numeric_prefix_with_separator(self):
+        self.assertEqual(
+            playlist_filename_from_metadata(
+                "01 - DELLAFUENTE - Paris.mp3",
+                {"track_number": "1", "title": "Paris"},
+                set(),
+            ),
+            "001 - DELLAFUENTE - Paris.mp3",
+        )
+
     def test_resolves_name_collisions(self):
         result = playlist_filename_from_metadata(
             "old.mp3",

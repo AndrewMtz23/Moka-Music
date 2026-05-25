@@ -79,9 +79,9 @@ class PlaylistWorkflowControllerTests(unittest.TestCase):
             self.assertEqual(
                 [(item.old_name, item.old_position, item.new_position, item.track_number, item.new_name) for item in plan.items],
                 [
-                    ("c.mp3", 3, 1, 1, "001 - C - Three.mp3"),
-                    ("a.mp3", 1, 2, 2, "002 - A - One.mp3"),
-                    ("b.mp3", 2, 3, 3, "003 - B - Two.mp3"),
+                    ("c.mp3", 3, 1, 0, "000 - C - Three.mp3"),
+                    ("a.mp3", 1, 2, 1, "001 - A - One.mp3"),
+                    ("b.mp3", 2, 3, 2, "002 - B - Two.mp3"),
                 ],
             )
 
@@ -120,20 +120,20 @@ class PlaylistWorkflowControllerTests(unittest.TestCase):
             self.assertEqual(result.track_numbers_updated, 3)
             self.assertEqual(result.renamed, 3)
             self.assertEqual(result.errors, [])
-            self.assertEqual(result.preview_filename, "001 - C - Three.mp3")
+            self.assertEqual(result.preview_filename, "000 - C - Three.mp3")
             self.assertEqual(result.changed_pairs, {(id(controller), id("tree"))})
             self.assertEqual(result.backup_path, folder / "backup.json")
             self.assertEqual(controller.backups[0][1], ["a.mp3", "b.mp3", "c.mp3"])
             self.assertEqual(
                 controller.archivos,
-                ["001 - C - Three.mp3", "002 - A - One.mp3", "003 - B - Two.mp3"],
+                ["000 - C - Three.mp3", "001 - A - One.mp3", "002 - B - Two.mp3"],
             )
-            self.assertEqual(controller.metadata["001 - C - Three.mp3"]["track_number"], "1")
-            self.assertEqual(controller.metadata["002 - A - One.mp3"]["track_number"], "2")
-            self.assertEqual(controller.metadata["003 - B - Two.mp3"]["track_number"], "3")
-            self.assertTrue((folder / "001 - C - Three.mp3").exists())
-            self.assertTrue((folder / "002 - A - One.mp3").exists())
-            self.assertTrue((folder / "003 - B - Two.mp3").exists())
+            self.assertEqual(controller.metadata["000 - C - Three.mp3"]["track_number"], "0")
+            self.assertEqual(controller.metadata["001 - A - One.mp3"]["track_number"], "1")
+            self.assertEqual(controller.metadata["002 - B - Two.mp3"]["track_number"], "2")
+            self.assertTrue((folder / "000 - C - Three.mp3").exists())
+            self.assertTrue((folder / "001 - A - One.mp3").exists())
+            self.assertTrue((folder / "002 - B - Two.mp3").exists())
             self.assertGreaterEqual(len(song_info.invalidated), 9)
 
     def test_action_result_wraps_success_and_errors(self):

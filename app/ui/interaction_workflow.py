@@ -1,11 +1,13 @@
 ﻿from __future__ import annotations
 
 from pathlib import Path
-from tkinter import messagebox
+from tkinter import messagebox, simpledialog
 
 from ..controllers.add_music_controller import abrir_selector_archivo, agregar_a_lista
 from ..controllers.metadata_controller import MetadataController
+from ..models import SortMode
 from ..utils.ui_formatting import format_action_error
+from ..views.modals.incoming_folder_guide_modal import show_incoming_folder_guide
 
 
 class InteractionWorkflowMixin:
@@ -95,6 +97,88 @@ class InteractionWorkflowMixin:
             self.preview,
         )
         self._handle_action_result(result)
+        if result.success and result.data:
+            moved_filename = result.data.get("filename")
+            if isinstance(moved_filename, str):
+                self._position_moved_song_in_main(moved_filename)
+
+    def _position_moved_song_in_main(self, filename: str) -> None:
+        if filename not in self.controller_principal.archivos:
+            return
+        total = len(self.controller_principal.archivos)
+        position = simpledialog.askinteger(
+            self.t("move_position.title"),
+            self.t("move_position.prompt", name=filename, total_minus_one=max(0, total - 1)),
+            parent=self.root,
+            minvalue=0,
+            maxvalue=max(0, total - 1),
+        )
+        if position is None:
+            self._select_filename_in_tree(self.tree_principal, filename)
+            return
+        order = [name for name in self.controller_principal.archivos if name != filename]
+        insert_at = max(0, min(int(position), len(order)))
+        order[insert_at:insert_at] = [filename]
+        self.controller_principal.reorder_files(order)
+        self._refresh_library_tree(self.controller_principal, self.tree_principal)
+        self._set_sort_widget_for_controller(self.controller_principal, SortMode.MANUAL)
+        self._select_filename_in_tree(self.tree_principal, filename)
+        self._load_song_preview(self.controller_principal, filename)
+
+    def _show_incoming_folder_guide(self) -> None:
+        if not self._ensure_incoming_context():
+            return
+        actions = [
+            (
+                "incoming_guide.open_global",
+                "incoming_guide.open_global_desc",
+                lambda: self._set_global_metadata_view(True),
+            ),
+            (
+                "incoming_guide.clear_metadata",
+                "incoming_guide.clear_metadata_desc",
+                self._show_clear_metadata_modal,
+            ),
+            (
+                "incoming_guide.edit_metadata",
+                "incoming_guide.edit_metadata_desc",
+                self._show_edit_metadata_modal,
+            ),
+            (
+                "incoming_guide.cover",
+                "incoming_guide.cover_desc",
+                self._select_preview_cover,
+            ),
+            (
+                "incoming_guide.prepare_playlist",
+                "incoming_guide.prepare_playlist_desc",
+                self._prepare_active_playlist,
+            ),
+            (
+                "incoming_guide.move_selected",
+                "incoming_guide.move_selected_desc",
+                self._move_to_main,
+            ),
+        ]
+        show_incoming_folder_guide(self.root, self.t, actions)
+
+    def _ensure_incoming_context(self) -> bool:
+        if not self.controller_nueva.archivos:
+            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
+            return False
+        self.tree_principal.selection_clear(0, "end")
+        selection = self.tree_nueva.selection()
+        if not selection:
+            first_item = self.tree_nueva.get_children()[0]
+            self.tree_nueva.selection_set(first_item)
+            self.tree_nueva.focus(first_item)
+            self.tree_nueva.see(first_item)
+            selection = self.tree_nueva.selection()
+        item = self.tree_nueva.item(selection[0])
+        filename = self._filename_from_tree_item(item)
+        if filename:
+            self._load_song_preview(self.controller_nueva, filename)
+        return True
 
     def _show_context_menu(self, event, controller: MetadataController, tree) -> None:
         other_controller = self.controller_principal if controller == self.controller_nueva else self.controller_nueva
