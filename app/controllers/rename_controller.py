@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 from ..services.file_service import sanitize_filename
+from ..services.playlist_naming_service import playlist_filename_from_metadata
 from ..utils.ui_formatting import filename_from_metadata
 
 
@@ -52,6 +53,23 @@ class RenameController:
             metadata,
             used_names,
             sanitize_filename,
+        )
+
+    def playlist_filename_from_metadata(
+        self,
+        controller,
+        filename: str,
+        used_names: set[str],
+        *,
+        track_number: int | None = None,
+    ) -> str:
+        cached = controller.get_track_info(filename)
+        metadata = cached.metadata if cached else {}
+        return playlist_filename_from_metadata(
+            filename,
+            metadata,
+            used_names,
+            track_number=track_number,
         )
 
     def execute_plan(

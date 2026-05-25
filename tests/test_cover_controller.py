@@ -20,6 +20,7 @@ class FakeController:
         self.carpeta = str(folder)
         self.fail = fail
         self.applied = []
+        self.archivos = ["one.mp3", "two.mp3", "three.mp3"]
 
     def aplicar_cambios_a_archivos(self, filenames, metadata, cover_path):
         self.applied.append((filenames, metadata, cover_path))
@@ -74,25 +75,30 @@ class CoverControllerTests(unittest.TestCase):
     def test_apply_manual_cover_tracks_success_cache_and_preview(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
+            source_cover = folder / "new-cover.png"
+            Image.new("RGB", (20, 20), color="green").save(source_cover)
             controller = FakeController(folder)
             song_info = FakeSongInfo()
 
             result = CoverController().apply_manual_cover(
                 targets=[(controller, "tree", ["one.mp3", "two.mp3"])],
-                cover_path="cover.jpg",
+                cover_path=str(source_cover),
                 song_info=song_info,
                 preview_controller=controller,
                 preview_filename="two.mp3",
             )
 
-            self.assertEqual(result.success_count, 2)
+            self.assertEqual(result.success_count, 3)
             self.assertEqual(result.errors, [])
             self.assertTrue(result.affected_preview)
-            self.assertEqual(result.preview_cover_path, "cover.jpg")
+            self.assertEqual(result.preview_cover_path, str(folder / "PORTADA.jpg"))
             self.assertEqual(result.changed_pairs, {(id(controller), id("tree"))})
+            self.assertEqual(controller.applied[0][0], ["one.mp3", "two.mp3", "three.mp3"])
+            self.assertEqual(controller.applied[0][2], str(folder / "PORTADA.jpg"))
+            self.assertTrue((folder / "PORTADA.jpg").exists())
             self.assertEqual(
                 song_info.invalidated,
-                [str(folder / "one.mp3"), str(folder / "two.mp3")],
+                [str(folder / "one.mp3"), str(folder / "two.mp3"), str(folder / "three.mp3")],
             )
 
 

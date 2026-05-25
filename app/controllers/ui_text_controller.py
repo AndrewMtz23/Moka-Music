@@ -31,6 +31,7 @@ TEXT_WIDGET_KEYS: dict[str, tuple[str, str]] = {
     "quick_title_only_button": ("text", "quick_actions.title_only"),
     "quick_title_from_file_button": ("text", "quick_actions.title_from_file"),
     "quick_number_tracks_button": ("text", "quick_actions.number_tracks"),
+    "quick_insert_position_button": ("text", "quick_actions.insert_position"),
     "quick_copy_artist_button": ("text", "quick_actions.copy_artist"),
     "quick_rename_metadata_button": ("text", "quick_actions.rename_from_metadata"),
     "quick_auto_cover_button": ("text", "quick_actions.auto_cover"),

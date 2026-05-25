@@ -2,7 +2,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from ..services.cover_service import find_folder_cover
+from ..services.cover_service import find_folder_cover, replace_folder_cover
 
 
 @dataclass
@@ -66,10 +66,16 @@ class CoverController:
         preview_controller,
         preview_filename: Optional[str],
     ) -> CoverApplyResult:
-        groups = [
-            (controller, tree, filenames, cover_path)
-            for controller, tree, filenames in targets
-        ]
+        groups: list[tuple[object, object, list[str], str]] = []
+        seen_controllers: set[int] = set()
+        for controller, tree, _filenames in targets:
+            if id(controller) in seen_controllers:
+                continue
+            seen_controllers.add(id(controller))
+            folder_cover_path = replace_folder_cover(cover_path, controller.carpeta)
+            if not folder_cover_path:
+                continue
+            groups.append((controller, tree, controller.archivos.copy(), folder_cover_path))
         return self.apply_cover_plan(
             groups,
             song_info=song_info,

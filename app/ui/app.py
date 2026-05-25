@@ -91,14 +91,25 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         main_panel = ttk.Frame(self.root)
         main_panel.pack(fill="both", expand=True, padx=14, pady=14)
 
-        top_panel = ttk.PanedWindow(main_panel, orient="horizontal")
-        top_panel.pack(fill="both", expand=True, pady=(0, 12))
+        main_paned = ttk.PanedWindow(main_panel, orient="vertical")
+        main_paned.pack(fill="both", expand=True)
 
-        self._setup_music_panel(top_panel, self.controller_principal, "panel.main_library", is_main=True)
-        self._setup_music_panel(top_panel, self.controller_nueva, "panel.incoming_library", is_main=False)
+        top_area = ttk.Frame(main_paned)
+        self._global_metadata_view_active = False
 
-        bottom_panel = ttk.PanedWindow(main_panel, orient="horizontal")
-        bottom_panel.pack(fill="x", pady=(0, 12))
+        self.top_library_panel = ttk.PanedWindow(top_area, orient="horizontal")
+        self.top_library_panel.pack(fill="both", expand=True)
+
+        self.top_metadata_panel = ttk.Frame(top_area)
+
+        self._setup_music_panel(self.top_library_panel, self.controller_principal, "panel.main_library", is_main=True)
+        self._setup_music_panel(self.top_library_panel, self.controller_nueva, "panel.incoming_library", is_main=False)
+        self._setup_metadata_panel(self.top_metadata_panel)
+
+        lower_panel = ttk.Frame(main_paned)
+
+        bottom_panel = ttk.PanedWindow(lower_panel, orient="horizontal")
+        bottom_panel.pack(fill="both", expand=True)
 
         self.preview = PreviewPanel(bottom_panel, translator=self.t, show_inline_editor=False)
         self.preview.on_save_requested = self._save_preview_metadata
@@ -118,7 +129,27 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
             bottom_panel.add(self.preview)
             bottom_panel.add(self.player)
 
-        self._setup_metadata_panel(main_panel)
+        try:
+            main_paned.add(top_area, weight=4)
+            main_paned.add(lower_panel, weight=2)
+        except tk.TclError:
+            main_paned.add(top_area)
+            main_paned.add(lower_panel)
+
+    def _toggle_global_metadata_view(self) -> None:
+        self._set_global_metadata_view(not self._global_metadata_view_active)
+
+    def _set_global_metadata_view(self, active: bool) -> None:
+        self._global_metadata_view_active = active
+        if active:
+            self.top_library_panel.pack_forget()
+            self.top_metadata_panel.pack(fill="both", expand=True)
+            self.global_metadata_toggle_button.configure(text=self.t("button.back_to_libraries"))
+            return
+
+        self.top_metadata_panel.pack_forget()
+        self.top_library_panel.pack(fill="both", expand=True)
+        self.global_metadata_toggle_button.configure(text=self.t("button.global_metadata"))
 
     def _setup_music_panel(self, parent, controller: MetadataController, title_key: str, *, is_main: bool) -> None:
         bundle = build_library_panel(
@@ -143,6 +174,8 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
                 if is_main
                 else lambda _controller, _tree: self._move_to_main()
             ),
+            extra_action_text="" if is_main else self.t("button.global_metadata"),
+            on_extra_action=None if is_main else self._toggle_global_metadata_view,
         )
 
         self._library_panels.append(bundle.panel_state(controller))
@@ -161,6 +194,8 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         else:
             self.tree_nueva = bundle.tree
             self._ui_text_widgets["move_to_main_button"] = bundle.action_button
+            if bundle.extra_button is not None:
+                self.global_metadata_toggle_button = bundle.extra_button
 
     def _setup_metadata_panel(self, parent) -> None:
         bundle = build_metadata_panel(
@@ -171,7 +206,8 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
             on_apply_all=self._apply_to_all,
             on_clear_fields=self._clear_metadata_fields,
             on_quick_cleanup=self._apply_quick_cleanup,
-            on_number_tracks=self._number_tracks_for_active_library,
+            on_number_tracks=self._prepare_active_playlist,
+            on_insert_position=self._insert_selected_at_position,
             on_rename_from_metadata=self._show_rename_from_metadata_preview,
             on_auto_cover=self._apply_auto_cover_from_folder,
             on_apply_preset=self._apply_selected_cleanup_preset,

@@ -12,6 +12,7 @@ from ..controllers.metadata_apply_controller import MetadataApplyController
 from ..controllers.metadata_dialog_controller import MetadataDialogController
 from ..controllers.menu_controller import MenuCallbacks, MenuController
 from ..controllers.playback_selection_controller import PlaybackSelectionController
+from ..controllers.playlist_workflow_controller import PlaylistWorkflowController
 from ..controllers.rename_controller import RenameController
 from ..controllers.selection_controller import SelectionController
 from ..controllers.ui_text_controller import UiTextController
@@ -262,6 +263,9 @@ class AppLifecycleMixin:
             refresh_library_tree=self._refresh_library_tree,
         )
         self._refresh_cleanup_preset_menu()
+        if hasattr(self, "global_metadata_toggle_button"):
+            key = "button.back_to_libraries" if getattr(self, "_global_metadata_view_active", False) else "button.global_metadata"
+            self.global_metadata_toggle_button.configure(text=self.t(key))
 
     def _install_search_placeholder(self, entry, variable) -> None:
         panel = self._get_library_panel_for_search(variable)
@@ -334,6 +338,11 @@ class AppLifecycleMixin:
         if not hasattr(self, "rename_controller"):
             self.rename_controller = RenameController()
         return self.rename_controller
+
+    def _playlist_workflow_controller(self) -> PlaylistWorkflowController:
+        if not hasattr(self, "playlist_workflow_controller"):
+            self.playlist_workflow_controller = PlaylistWorkflowController(self._rename_controller())
+        return self.playlist_workflow_controller
 
     def _metadata_apply_controller(self) -> MetadataApplyController:
         if not hasattr(self, "metadata_apply_controller"):

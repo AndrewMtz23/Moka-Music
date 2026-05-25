@@ -19,6 +19,12 @@ from .metadata_dialog_controller import METADATA_FIELDS, MetadataDialogControlle
 from .menu_controller import MenuCallbacks, MenuController
 from .playback_controller import PlaybackController
 from .playback_selection_controller import PlaybackSelection, PlaybackSelectionController
+from .playlist_workflow_controller import (
+    PlaylistApplyResult,
+    PlaylistPlanItem,
+    PlaylistWorkflowController,
+    PlaylistWorkflowPlan,
+)
 from .rename_controller import RenameApplyResult, RenameController, RenamePlanItem
 from .selection_controller import SelectionController
 from .song_actions_controller import SongActions
@@ -47,6 +53,10 @@ __all__ = [
     "PlaybackController",
     "PlaybackSelection",
     "PlaybackSelectionController",
+    "PlaylistApplyResult",
+    "PlaylistPlanItem",
+    "PlaylistWorkflowController",
+    "PlaylistWorkflowPlan",
     "PresetUpsertResult",
     "PreviewMetadataTarget",
     "RenameApplyResult",

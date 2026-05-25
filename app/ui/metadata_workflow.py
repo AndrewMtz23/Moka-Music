@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from tkinter import messagebox
+from tkinter import messagebox, simpledialog
 
 from ..controllers.backup_controller import BackupController
 from ..controllers.cleanup_controller import CleanupController
 from ..controllers.cleanup_preset_controller import CleanupPresetController
+from ..models import SortMode
 from ..utils.ui_formatting import metadata_label_key
 from ..views.modals.backup_history_modal import show_backup_history_modal
 from ..views.modals.change_preview_modal import confirm_change_preview
 from ..views.modals.cleanup_preset_modal import show_cleanup_preset_modal
+from ..views.modals.playlist_insert_preview_modal import confirm_playlist_insert_preview
 from ..views.modals.rename_metadata_modal import confirm_rename_metadata
 
 
@@ -49,7 +51,7 @@ class MetadataWorkflowMixin:
             return
         cover_path = self.file_handler.seleccionar_imagen()
         if cover_path:
-            self._apply_cover_to_targets(cover_path)
+            self._apply_cover_to_targets(cover_path, targets=self._preview_cover_targets())
 
     def _handle_cover_drop(self, event) -> None:
         try:
@@ -57,7 +59,7 @@ class MetadataWorkflowMixin:
             if not payload.image_files:
                 messagebox.showwarning(self.t("dialog.cover_selected"), self.t("message.no_image_dropped"))
                 return
-            self._apply_cover_to_targets(payload.image_files[0])
+            self._apply_cover_to_targets(payload.image_files[0], targets=self._preview_cover_targets())
         except Exception as exc:
             self.logger.error("Error handling cover drop: %s", exc)
             messagebox.showerror(self.t("dialog.error"), self.t("message.could_not_process_drop", error=exc))
@@ -70,14 +72,25 @@ class MetadataWorkflowMixin:
             tree_for_controller=self._tree_for_controller,
         )
 
-    def _apply_cover_to_targets(self, cover_path: str) -> None:
+    def _preview_cover_targets(self) -> list[tuple[MetadataController, object, list[str]]]:
+        controller = self._preview_controller
+        filename = self._preview_filename
+        if controller is None or not filename:
+            return []
+        tree = self._tree_for_controller(controller)
+        if tree is None:
+            return []
+        return [(controller, tree, [filename])]
+
+    def _apply_cover_to_targets(self, cover_path: str, targets=None) -> None:
         if not self.file_handler.validar_imagen(cover_path):
             return
-        targets = self._cover_targets()
-        target_count = sum(len(filenames) for _controller, _tree, filenames in targets)
+        targets = targets if targets is not None else self._cover_targets()
         if not targets:
             messagebox.showwarning(self.t("dialog.selection"), self.t("message.no_cover_target"))
             return
+        folder_targets = self._folder_cover_targets(targets)
+        target_count = sum(len(filenames) for _controller, _tree, filenames in folder_targets)
         self.preview.update_cover_from_file(cover_path)
         backup_metadata = {"__cover__": os.path.basename(cover_path)}
         if not messagebox.askyesno(
@@ -85,7 +98,7 @@ class MetadataWorkflowMixin:
             self.t("message.apply_cover_to_count", count=target_count, name=os.path.basename(cover_path)),
         ):
             return
-        if not self._create_metadata_backup_for_groups(targets, backup_metadata):
+        if not self._create_metadata_backup_for_groups(folder_targets, backup_metadata):
             return
 
         result = self._cover_controller().apply_manual_cover(
@@ -111,6 +124,16 @@ class MetadataWorkflowMixin:
             self.t("dialog.error"),
             "\n".join(result.errors) if result.errors else self.t("message.could_not_apply_metadata"),
         )
+
+    def _folder_cover_targets(self, targets):
+        folder_targets = []
+        seen_controllers: set[int] = set()
+        for controller, tree, _filenames in targets:
+            if id(controller) in seen_controllers:
+                continue
+            seen_controllers.add(id(controller))
+            folder_targets.append((controller, tree, controller.archivos.copy()))
+        return folder_targets
 
     def _apply_auto_cover_from_folder(self) -> None:
         targets = self._cover_targets()
@@ -591,6 +614,153 @@ class MetadataWorkflowMixin:
             if self._preview_controller is controller and self._preview_filename:
                 self._load_song_preview(controller, self._preview_filename)
         self._handle_action_result(result)
+
+    def _insert_selected_at_position(self) -> None:
+        selections = self._selected_filenames_by_controller()
+        if not selections:
+            messagebox.showwarning(self.t("dialog.selection"), self.t("message.no_song_selected"))
+            return
+        if len(selections) > 1:
+            messagebox.showwarning(self.t("dialog.selection"), self.t("playlist_insert.one_library"))
+            return
+
+        controller, tree, filenames = selections[0]
+        if not controller.archivos:
+            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
+            return
+        if not self._can_reorder_current_view(controller, tree):
+            messagebox.showwarning(self.t("dialog.selection"), self.t("message.reorder_needs_full_view"))
+            return
+
+        position = simpledialog.askinteger(
+            self.t("playlist_insert.title"),
+            self.t("playlist_insert.prompt", count=len(filenames), total=len(controller.archivos)),
+            parent=self.root,
+            minvalue=1,
+            maxvalue=len(controller.archivos),
+        )
+        if position is None:
+            return
+
+        plan = self._playlist_workflow_controller().build_insert_plan(
+            controller=controller,
+            tree=tree,
+            filenames=filenames,
+            position=position,
+        )
+        if not plan.items:
+            messagebox.showinfo(self.t("dialog.done"), self.t("change_preview.no_changes"))
+            return
+        if not confirm_playlist_insert_preview(self.root, self.t, plan):
+            return
+
+        result = self._playlist_workflow_controller().execute_plan(
+            plan,
+            song_info=self.song_info,
+            preview_controller=self._preview_controller,
+            preview_filename=self._preview_filename,
+        )
+        self._preview_filename = result.preview_filename
+        self._refresh_changed_library_pairs([(controller, tree, plan.final_order)], result.changed_pairs)
+        self._set_sort_widget_for_controller(controller, SortMode.MANUAL)
+
+        if self._preview_controller is controller and self._preview_filename:
+            self._select_filename_in_tree(tree, self._preview_filename)
+            self._load_song_preview(controller, self._preview_filename)
+
+        if result.success:
+            message = self.t(
+                "playlist_insert.done",
+                tracks=result.track_numbers_updated,
+                renamed=result.renamed,
+            )
+            if result.backup_path:
+                message += f"\n{self.t('message.backup_created', path=result.backup_path)}"
+            messagebox.showinfo(self.t("dialog.done"), message)
+            return
+
+        messagebox.showerror(
+            self.t("dialog.error"),
+            "\n".join(result.errors) if result.errors else self.t("message.could_not_apply_metadata"),
+        )
+
+    def _prepare_active_playlist(self) -> None:
+        target = self._active_playlist_target()
+        if target is None:
+            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
+            return
+
+        controller, tree = target
+        if not self._can_reorder_current_view(controller, tree):
+            messagebox.showwarning(self.t("dialog.selection"), self.t("message.reorder_needs_full_view"))
+            return
+
+        plan = self._playlist_workflow_controller().build_plan_from_order(
+            controller=controller,
+            tree=tree,
+            final_order=controller.archivos.copy(),
+        )
+        if not plan.items:
+            messagebox.showinfo(self.t("dialog.done"), self.t("change_preview.no_changes"))
+            return
+        if not confirm_playlist_insert_preview(self.root, self.t, plan):
+            return
+
+        result = self._playlist_workflow_controller().execute_plan(
+            plan,
+            song_info=self.song_info,
+            preview_controller=self._preview_controller,
+            preview_filename=self._preview_filename,
+        )
+        self._preview_filename = result.preview_filename
+        self._refresh_changed_library_pairs([(controller, tree, plan.final_order)], result.changed_pairs)
+        self._set_sort_widget_for_controller(controller, SortMode.MANUAL)
+
+        if self._preview_controller is controller and self._preview_filename:
+            self._select_filename_in_tree(tree, self._preview_filename)
+            self._load_song_preview(controller, self._preview_filename)
+
+        if result.success:
+            message = self.t(
+                "playlist_prepare.done",
+                tracks=result.track_numbers_updated,
+                renamed=result.renamed,
+            )
+            if result.backup_path:
+                message += f"\n{self.t('message.backup_created', path=result.backup_path)}"
+            messagebox.showinfo(self.t("dialog.done"), message)
+            return
+
+        messagebox.showerror(
+            self.t("dialog.error"),
+            "\n".join(result.errors) if result.errors else self.t("message.could_not_apply_metadata"),
+        )
+
+    def _active_playlist_target(self):
+        selections = self._selected_filenames_by_controller()
+        if len(selections) > 1:
+            messagebox.showwarning(self.t("dialog.selection"), self.t("playlist_insert.one_library"))
+            return None
+        if selections:
+            controller, tree, _filenames = selections[0]
+            return controller, tree
+        if self._preview_controller is not None and self._preview_controller.archivos:
+            tree = self._tree_for_controller(self._preview_controller)
+            if tree is not None:
+                return self._preview_controller, tree
+        if self.controller_nueva.archivos:
+            return self.controller_nueva, self.tree_nueva
+        if self.controller_principal.archivos:
+            return self.controller_principal, self.tree_principal
+        return None
+
+    def _select_filename_in_tree(self, tree, filename: str) -> None:
+        for item_id in tree.get_children():
+            if self._filename_from_tree_item(tree.item(item_id)) == filename:
+                tree.selection_set(item_id)
+                tree.focus(item_id)
+                tree.see(item_id)
+                return
 
     def _show_rename_from_metadata_preview(self) -> None:
         selections = self._selected_filenames_by_controller()

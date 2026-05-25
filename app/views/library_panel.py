@@ -23,6 +23,7 @@ class LibraryPanelBundle:
     filter_menu: ttk.Combobox
     result_label: ttk.Label
     action_button: ttk.Button
+    extra_button: ttk.Button | None = None
 
     def panel_state(self, controller: MetadataController) -> dict[str, object]:
         return {
@@ -57,6 +58,8 @@ def build_library_panel(
     on_sort: Callable[[MetadataController, LibraryListbox, str], None],
     on_refresh: Callable[[MetadataController, LibraryListbox], None],
     on_action: Callable[[MetadataController, LibraryListbox], None],
+    extra_action_text: str = "",
+    on_extra_action: Callable[[], None] | None = None,
 ) -> LibraryPanelBundle:
     frame = ttk.LabelFrame(parent, text=title)
     try:
@@ -81,6 +84,16 @@ def build_library_panel(
         style="Secondary.TButton",
     )
     select_button.pack(side="left", padx=(0, 5))
+
+    extra_button = None
+    if extra_action_text and on_extra_action is not None:
+        extra_button = ttk.Button(
+            toolbar,
+            text=extra_action_text,
+            command=on_extra_action,
+            style="Secondary.TButton",
+        )
+        extra_button.pack(side="left", padx=(0, 5))
 
     sort_menu = ttk.Combobox(
         toolbar,
@@ -175,4 +188,5 @@ def build_library_panel(
         filter_menu=filter_menu,
         result_label=result_label,
         action_button=action_button,
+        extra_button=extra_button,
     )

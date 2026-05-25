@@ -49,6 +49,24 @@ class RenameControllerTests(unittest.TestCase):
             self.assertEqual(plan[0].old_name, "old.mp3")
             self.assertEqual(plan[0].new_name, "01. Artist - Title.mp3")
 
+    def test_playlist_filename_uses_playlist_format(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            controller = FakeController(
+                temp_dir,
+                ["old.mp3"],
+                {
+                    "old.mp3": {
+                        "track_number": "100",
+                        "artist": "Artist",
+                        "title": "Title",
+                    }
+                },
+            )
+
+            result = RenameController().playlist_filename_from_metadata(controller, "old.mp3", set())
+
+            self.assertEqual(result, "100 - Artist - Title.mp3")
+
     def test_build_plan_skips_unchanged_names(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             controller = FakeController(temp_dir, ["same.mp3"], {"same.mp3": {"title": "same"}})
