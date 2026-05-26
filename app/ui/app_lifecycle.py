@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from pathlib import Path
+import tkinter as tk
 from tkinter import messagebox
 
 from ..constants import APP_NAME, UISettings
@@ -27,10 +28,23 @@ class AppLifecycleMixin:
         width, height = UISettings.WINDOW_DEFAULT_SIZE
         self.root.geometry(f"{width}x{height}")
         self.root.minsize(*UISettings.WINDOW_MIN_SIZE)
+        self._setup_window_icon()
+
+    def _setup_window_icon(self) -> None:
+        assets_dir = Path(__file__).resolve().parents[2] / "assets"
+
         try:
-            icon_path = Path("assets") / "Moka.ico"
+            icon_path = assets_dir / "Moka.ico"
             if icon_path.exists():
                 self.root.iconbitmap(str(icon_path))
+        except Exception:
+            pass
+
+        try:
+            logo_path = assets_dir / "logo.png"
+            if logo_path.exists():
+                self._window_icon = tk.PhotoImage(file=str(logo_path))
+                self.root.iconphoto(True, self._window_icon)
         except Exception:
             pass
 
