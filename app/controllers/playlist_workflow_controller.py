@@ -1,11 +1,14 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from .rename_controller import RenameController
 from ..models import ActionResult
 from ..services.playlist_order_service import insert_at_position, renumber_order
+
+
+ProgressCallback = Callable[[int, int, str], bool]
 
 
 @dataclass(frozen=True)
@@ -104,6 +107,7 @@ class PlaylistWorkflowController:
         preview_controller=None,
         preview_filename: Optional[str] = None,
         create_backup: bool = True,
+        progress_callback: ProgressCallback | None = None,
     ) -> PlaylistApplyResult:
         errors: list[str] = []
         backup_path: Optional[Path] = None
@@ -126,13 +130,26 @@ class PlaylistWorkflowController:
         except Exception as exc:
             errors.append(f"order: {exc}")
 
-        updated = self._apply_track_numbers(plan, song_info=song_info, errors=errors)
+        rename_count = len([item for item in plan.items if item.old_name != item.new_name])
+        total_steps = len(plan.items) + rename_count
+        progress_state = {"completed": 0}
+        updated = self._apply_track_numbers(
+            plan,
+            song_info=song_info,
+            errors=errors,
+            progress_callback=progress_callback,
+            progress_state=progress_state,
+            total_steps=total_steps,
+        )
         renamed, updated_preview = self._rename_items(
             plan,
             song_info=song_info,
             errors=errors,
             preview_controller=preview_controller,
             preview_filename=preview_filename,
+            progress_callback=progress_callback,
+            progress_state=progress_state,
+            total_steps=total_steps,
         )
 
         final_names = [
@@ -156,9 +173,21 @@ class PlaylistWorkflowController:
             backup_path=backup_path,
         )
 
-    def _apply_track_numbers(self, plan: PlaylistWorkflowPlan, *, song_info, errors: list[str]) -> int:
+    def _apply_track_numbers(
+        self,
+        plan: PlaylistWorkflowPlan,
+        *,
+        song_info,
+        errors: list[str],
+        progress_callback: ProgressCallback | None,
+        progress_state: dict[str, int],
+        total_steps: int,
+    ) -> int:
         updated = 0
         for item in plan.items:
+            if progress_callback and not progress_callback(progress_state["completed"], total_steps, item.old_name):
+                errors.append("Operacion cancelada por el usuario.")
+                break
             result = plan.controller.aplicar_cambios_a_archivo(
                 item.old_name,
                 {"track_number": str(item.track_number)},
@@ -166,9 +195,12 @@ class PlaylistWorkflowController:
             if getattr(result, "success", False):
                 updated += 1
                 self._invalidate(song_info, plan.controller, item.old_name)
-                continue
-            message = getattr(result, "message", "") or "No se pudo actualizar track_number"
-            errors.append(f"{item.old_name}: {message}")
+            else:
+                message = getattr(result, "message", "") or "No se pudo actualizar track_number"
+                errors.append(f"{item.old_name}: {message}")
+            progress_state["completed"] += 1
+            if progress_callback:
+                progress_callback(progress_state["completed"], total_steps, item.old_name)
         return updated
 
     def _rename_items(
@@ -179,6 +211,9 @@ class PlaylistWorkflowController:
         errors: list[str],
         preview_controller,
         preview_filename: Optional[str],
+        progress_callback: ProgressCallback | None,
+        progress_state: dict[str, int],
+        total_steps: int,
     ) -> tuple[int, Optional[str]]:
         rename_items = [item for item in plan.items if item.old_name != item.new_name]
         if not rename_items:
@@ -204,6 +239,9 @@ class PlaylistWorkflowController:
             self._invalidate(song_info, plan.controller, item.new_name)
             if plan.controller is preview_controller and preview_filename == item.old_name:
                 updated_preview = item.new_name
+            progress_state["completed"] += 1
+            if progress_callback:
+                progress_callback(progress_state["completed"], total_steps, item.new_name)
 
         return renamed, updated_preview
 

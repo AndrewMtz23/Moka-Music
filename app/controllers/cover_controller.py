@@ -5,6 +5,9 @@ from typing import Callable, Optional
 from ..services.cover_service import find_folder_cover, replace_folder_cover
 
 
+ProgressCallback = Callable[[int, int, str], bool]
+
+
 @dataclass
 class CoverPlan:
     groups: list[tuple[object, object, list[str], str]]
@@ -65,22 +68,26 @@ class CoverController:
         song_info,
         preview_controller,
         preview_filename: Optional[str],
+        progress_callback: ProgressCallback | None = None,
+        apply_entire_folder: bool = True,
     ) -> CoverApplyResult:
         groups: list[tuple[object, object, list[str], str]] = []
         seen_controllers: set[int] = set()
-        for controller, tree, _filenames in targets:
+        for controller, tree, filenames in targets:
             if id(controller) in seen_controllers:
                 continue
             seen_controllers.add(id(controller))
             folder_cover_path = replace_folder_cover(cover_path, controller.carpeta)
             if not folder_cover_path:
                 continue
-            groups.append((controller, tree, controller.archivos.copy(), folder_cover_path))
+            target_filenames = controller.archivos.copy() if apply_entire_folder else list(filenames)
+            groups.append((controller, tree, target_filenames, folder_cover_path))
         return self.apply_cover_plan(
             groups,
             song_info=song_info,
             preview_controller=preview_controller,
             preview_filename=preview_filename,
+            progress_callback=progress_callback,
         )
 
     def apply_cover_plan(
@@ -90,25 +97,53 @@ class CoverController:
         song_info,
         preview_controller,
         preview_filename: Optional[str],
+        progress_callback: ProgressCallback | None = None,
     ) -> CoverApplyResult:
         total_success = 0
         all_errors: list[str] = []
         affected_preview = False
         preview_cover_path = None
         changed_pairs: set[tuple[int, int]] = set()
+        total = sum(len(filenames) for _controller, _tree, filenames, _cover_path in groups)
+        completed = 0
 
         for controller, tree, filenames, cover_path in groups:
-            success_count, errors = controller.aplicar_cambios_a_archivos(filenames, {}, cover_path)
-            total_success += success_count
-            all_errors.extend(errors)
-            if success_count:
-                changed_pairs.add((id(controller), id(tree)))
+            if progress_callback is None:
+                success_count, errors = controller.aplicar_cambios_a_archivos(filenames, {}, cover_path)
+                total_success += success_count
+                all_errors.extend(errors)
+                if success_count:
+                    changed_pairs.add((id(controller), id(tree)))
+                for filename in filenames:
+                    if controller.carpeta:
+                        song_info.invalidate(os.path.join(controller.carpeta, filename))
+                    if controller is preview_controller and filename == preview_filename:
+                        affected_preview = True
+                        preview_cover_path = cover_path
+                continue
             for filename in filenames:
+                if not progress_callback(completed, total, filename):
+                    all_errors.append("Operacion cancelada por el usuario.")
+                    return CoverApplyResult(
+                        success_count=total_success,
+                        errors=all_errors,
+                        affected_preview=affected_preview,
+                        changed_pairs=changed_pairs,
+                        preview_cover_path=preview_cover_path,
+                    )
+                result = controller.aplicar_cambios_a_archivo(filename, {}, cover_path)
+                completed += 1
+                if getattr(result, "success", False):
+                    total_success += 1
+                    changed_pairs.add((id(controller), id(tree)))
+                else:
+                    all_errors.extend(getattr(result, "errors", []) or [getattr(result, "message", filename)])
                 if controller.carpeta:
                     song_info.invalidate(os.path.join(controller.carpeta, filename))
                 if controller is preview_controller and filename == preview_filename:
                     affected_preview = True
                     preview_cover_path = cover_path
+                progress_callback(completed, total, filename)
 
         return CoverApplyResult(
             success_count=total_success,

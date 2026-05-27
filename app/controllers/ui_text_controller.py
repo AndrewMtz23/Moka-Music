@@ -10,6 +10,8 @@ TEXT_WIDGET_KEYS: dict[str, tuple[str, str]] = {
     "incoming_select_folder": ("text", "button.select_folder"),
     "main_close_folder": ("text", "button.close_folder"),
     "incoming_close_folder": ("text", "button.close_folder"),
+    "main_empty_state_button": ("text", "button.select_folder"),
+    "incoming_empty_state_button": ("text", "button.select_folder"),
     "main_search_label": ("text", "search.label"),
     "incoming_search_label": ("text", "search.label"),
     "main_filter_label": ("text", "filter.label"),
@@ -37,6 +39,7 @@ TEXT_WIDGET_KEYS: dict[str, tuple[str, str]] = {
     "quick_copy_artist_button": ("text", "quick_actions.copy_artist"),
     "quick_rename_metadata_button": ("text", "quick_actions.rename_from_metadata"),
     "quick_auto_cover_button": ("text", "quick_actions.auto_cover"),
+    "quick_search_online_button": ("text", "quick_actions.search_online"),
     "incoming_global_metadata_button": ("text", "button.global_metadata"),
     "incoming_prepare_folder_button": ("text", "button.prepare_folder"),
     "preset_label": ("text", "presets.label"),
@@ -92,4 +95,10 @@ class UiTextController:
             filter_var.set(filter_text_for_mode(current_mode))
             refresh_search_placeholder(panel)
             apply_tree_colors(panel["tree"])
+            self._refresh_empty_state_button(panel)
             refresh_library_tree(panel["controller"], panel["tree"])
+
+    def _refresh_empty_state_button(self, panel: dict[str, object]) -> None:
+        button = panel.get("empty_state_button")
+        if button is not None:
+            button.configure(text=self.t("button.select_folder"))

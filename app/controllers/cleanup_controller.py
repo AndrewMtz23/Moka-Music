@@ -1,12 +1,13 @@
 import os
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 from ..utils.text_cleanup import build_quick_cleanup_metadata
 
 
 CleanupSelection = tuple[Any, object, list[str]]
 CleanupPlanItem = tuple[Any, object, str, dict[str, str]]
+ProgressCallback = Callable[[int, int, str], bool]
 
 
 @dataclass
@@ -128,13 +129,18 @@ class CleanupController:
         *,
         preview_controller=None,
         preview_filename: str | None = None,
+        progress_callback: ProgressCallback | None = None,
     ) -> CleanupExecutionResult:
         success_count = 0
         errors: list[str] = []
         changed_pairs: set[tuple[int, int]] = set()
         affected_preview = False
+        total = len(plan)
 
-        for controller, tree, filename, updates in plan:
+        for completed, (controller, tree, filename, updates) in enumerate(plan):
+            if progress_callback and not progress_callback(completed, total, filename):
+                errors.append("Operacion cancelada por el usuario.")
+                break
             result = controller.aplicar_cambios_a_archivo(filename, updates)
             if result.success:
                 success_count += 1
@@ -144,6 +150,8 @@ class CleanupController:
                     affected_preview = True
             else:
                 errors.extend(result.errors or [result.message])
+            if progress_callback:
+                progress_callback(completed + 1, total, filename)
 
         return CleanupExecutionResult(
             success_count=success_count,

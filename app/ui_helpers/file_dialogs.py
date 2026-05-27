@@ -83,6 +83,126 @@ class FileHandler:
             messagebox.showerror(self.t("dialog.error"), self.t("file.could_not_open_image_picker", error=exc))
             return None
 
+    def seleccionar_destino_playlist(self, initial_name: str = "playlist.m3u8") -> Optional[str]:
+        try:
+            filepath = filedialog.asksaveasfilename(
+                title=self.t("playlist_export.select_destination"),
+                initialdir=self._last_directory,
+                initialfile=initial_name,
+                defaultextension=".m3u8",
+                filetypes=[
+                    (self.t("playlist_export.m3u8"), "*.m3u8"),
+                    (self.t("playlist_export.m3u"), "*.m3u"),
+                    (self.t("playlist_export.pls"), "*.pls"),
+                    (self.t("playlist_export.json"), "*.json"),
+                    (self.t("file.all_files"), "*.*"),
+                ],
+            )
+            if filepath:
+                self._last_directory = os.path.dirname(filepath)
+            return filepath or None
+        except Exception as exc:
+            self.logger.error("Error selecting playlist destination: %s", exc)
+            messagebox.showerror(self.t("dialog.error"), self.t("playlist_export.could_not_open_picker", error=exc))
+            return None
+
+    def seleccionar_destino_library_view_json(self, initial_name: str = "library_view.json") -> Optional[str]:
+        try:
+            filepath = filedialog.asksaveasfilename(
+                title=self.t("library_view_export.select_destination"),
+                initialdir=self._last_directory,
+                initialfile=initial_name,
+                defaultextension=".json",
+                filetypes=[
+                    (self.t("playlist_export.json"), "*.json"),
+                    (self.t("file.all_files"), "*.*"),
+                ],
+            )
+            if filepath:
+                self._last_directory = os.path.dirname(filepath)
+            return filepath or None
+        except Exception as exc:
+            self.logger.error("Error selecting library view export destination: %s", exc)
+            messagebox.showerror(self.t("dialog.error"), self.t("library_view_export.could_not_open_picker", error=exc))
+            return None
+
+    def seleccionar_destino_library_report(self, initial_name: str = "library_report.json") -> Optional[str]:
+        try:
+            filepath = filedialog.asksaveasfilename(
+                title=self.t("library_report_export.select_destination"),
+                initialdir=self._last_directory,
+                initialfile=initial_name,
+                defaultextension=".json",
+                filetypes=[
+                    (self.t("playlist_export.json"), "*.json"),
+                    (self.t("library_report_export.csv"), "*.csv"),
+                    (self.t("file.all_files"), "*.*"),
+                ],
+            )
+            if filepath:
+                self._last_directory = os.path.dirname(filepath)
+            return filepath or None
+        except Exception as exc:
+            self.logger.error("Error selecting library report destination: %s", exc)
+            messagebox.showerror(self.t("dialog.error"), self.t("library_report_export.could_not_open_picker", error=exc))
+            return None
+
+    def seleccionar_metadata_json(self) -> Optional[str]:
+        try:
+            filepath = filedialog.askopenfilename(
+                title=self.t("metadata_import.select_file"),
+                initialdir=self._last_directory,
+                filetypes=[
+                    (self.t("playlist_export.json"), "*.json"),
+                    (self.t("file.all_files"), "*.*"),
+                ],
+            )
+            if filepath:
+                self._last_directory = os.path.dirname(filepath)
+            return filepath or None
+        except Exception as exc:
+            self.logger.error("Error selecting metadata import file: %s", exc)
+            messagebox.showerror(self.t("dialog.error"), self.t("metadata_import.could_not_open_picker", error=exc))
+            return None
+
+    def seleccionar_tema_json(self) -> Optional[str]:
+        try:
+            filepath = filedialog.askopenfilename(
+                title=self.t("theme_custom.import_title"),
+                initialdir=self._last_directory,
+                filetypes=[
+                    (self.t("playlist_export.json"), "*.json"),
+                    (self.t("file.all_files"), "*.*"),
+                ],
+            )
+            if filepath:
+                self._last_directory = os.path.dirname(filepath)
+            return filepath or None
+        except Exception as exc:
+            self.logger.error("Error selecting theme import file: %s", exc)
+            messagebox.showerror(self.t("dialog.error"), self.t("theme_custom.import_picker_failed", error=exc))
+            return None
+
+    def seleccionar_destino_tema_json(self, initial_name: str = "mokamusic_theme.json") -> Optional[str]:
+        try:
+            filepath = filedialog.asksaveasfilename(
+                title=self.t("theme_custom.export_title"),
+                initialdir=self._last_directory,
+                initialfile=initial_name,
+                defaultextension=".json",
+                filetypes=[
+                    (self.t("playlist_export.json"), "*.json"),
+                    (self.t("file.all_files"), "*.*"),
+                ],
+            )
+            if filepath:
+                self._last_directory = os.path.dirname(filepath)
+            return filepath or None
+        except Exception as exc:
+            self.logger.error("Error selecting theme export destination: %s", exc)
+            messagebox.showerror(self.t("dialog.error"), self.t("theme_custom.export_picker_failed", error=exc))
+            return None
+
     def validar_carpeta(self, carpeta: str) -> bool:
         try:
             path = Path(carpeta)

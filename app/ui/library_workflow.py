@@ -44,6 +44,10 @@ class LibraryWorkflowMixin:
                         self._load_song_preview(controller, filename)
             else:
                 self.preview.clear_preview()
+            target = "incoming" if controller is self.controller_nueva else "main"
+            self._remember_recent_folder(selected_folder, target)
+            self._setup_main_menu()
+            self._save_config()
             self.logger.info("Loaded folder %s with %s files", selected_folder, len(files))
         except Exception as exc:
             self.logger.error("Error loading folder: %s", exc)
@@ -64,6 +68,77 @@ class LibraryWorkflowMixin:
         tree.selection_clear(0, "end")
         self._refresh_library_tree(controller, tree)
         self._save_config()
+
+    def _refresh_library_folder(self, controller: MetadataController, tree) -> None:
+        if not controller.carpeta:
+            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
+            return
+        selected = [
+            self._filename_from_tree_item(tree.item(item_id))
+            for item_id in tree.selection()
+            if self._filename_from_tree_item(tree.item(item_id))
+        ]
+        try:
+            files = controller.refresh_library()
+            self._sync_playback_history_to_controllers()
+            self._refresh_library_tree(controller, tree)
+            restored = False
+            for filename in selected:
+                if filename in controller.archivos:
+                    restored = True
+                    self._select_filename_in_tree(tree, filename)
+                    break
+            if not restored and files:
+                children = tree.get_children()
+                if children:
+                    tree.selection_set(children[0])
+                    tree.focus(children[0])
+            self._show_toast(self.t("library.refresh_done", count=len(files)), kind="success")
+        except Exception as exc:
+            self.logger.error("Error refreshing library: %s", exc)
+            messagebox.showerror(self.t("dialog.error"), self.t("library.refresh_failed", error=exc))
+
+    def _delete_selected_from_library(self, controller: MetadataController, tree) -> None:
+        selections = self._selection_controller().selected_filenames_by_controller([(controller, tree)])
+        if not selections:
+            messagebox.showwarning(self.t("dialog.selection"), self.t("message.no_song_selected"))
+            return
+        _controller, _tree, filenames = selections[0]
+        if not messagebox.askyesno(
+            self.t("dialog.confirm"),
+            self.t("library.delete_confirm", count=len(filenames)),
+        ):
+            return
+
+        deleted = 0
+        errors: list[str] = []
+        for filename in filenames:
+            result = self.song_actions.eliminar_cancion(controller, filename, tree, self.preview)
+            if result.success:
+                deleted += 1
+            else:
+                errors.extend(result.errors or [result.message])
+
+        if controller is self._preview_controller and self._preview_filename in filenames:
+            self._preview_controller = None
+            self._preview_filename = None
+            self.preview.clear_preview()
+        if controller is self._playback_controller and self.player.playback.current_file:
+            current_name = os.path.basename(self.player.playback.current_file)
+            if current_name in filenames:
+                self._playback_controller = None
+                self._playback_tree = None
+                self.player.stop()
+
+        self._refresh_library_tree(controller, tree)
+        if errors:
+            messagebox.showwarning(
+                self.t("dialog.error"),
+                self.t("library.delete_partial", count=deleted, errors=len(errors)) + "\n\n" + "\n".join(errors[:5]),
+            )
+            self._show_toast(self.t("toast.partial"), kind="warning")
+            return
+        self._show_toast(self.t("library.delete_done", count=deleted), kind="success")
 
     def _update_treeview(self, tree, files: list[str]) -> None:
         panel_name = self._library_debug_name(self._controller_for_tree(tree), tree)
@@ -119,7 +194,25 @@ class LibraryWorkflowMixin:
     def _finish_reorder_drag(self, event, controller: MetadataController, tree) -> None:
         drag = self._reorder_drag
         self._reorder_drag = None
-        if not drag or drag.get("controller") is not controller or drag.get("tree") is not tree:
+        if not drag:
+            return
+        if drag.get("controller") is not controller or drag.get("tree") is not tree:
+            target = self._library_target_from_pointer(event)
+            if target is None:
+                return
+            destination_controller, destination_tree = target
+            origin_controller = drag.get("controller")
+            origin_tree = drag.get("tree")
+            filename = str(drag.get("filename", "") or "")
+            if destination_controller is origin_controller or not filename:
+                return
+            self._move_between_libraries_by_drag(
+                origin_controller,
+                origin_tree,
+                destination_controller,
+                destination_tree,
+                filename,
+            )
             return
 
         target_id = tree.identify_row(event.y)
@@ -152,6 +245,26 @@ class LibraryWorkflowMixin:
                 self._load_song_preview(controller, moved)
                 break
         self._handle_action_result(result)
+
+    def _library_target_from_pointer(self, event):
+        widget = None
+        try:
+            widget = self.root.winfo_containing(event.x_root, event.y_root)
+        except Exception:
+            return None
+        for controller, tree in (
+            (getattr(self, "controller_principal", None), getattr(self, "tree_principal", None)),
+            (getattr(self, "controller_nueva", None), getattr(self, "tree_nueva", None)),
+        ):
+            current = widget
+            while current is not None:
+                if current is tree:
+                    return controller, tree
+                try:
+                    current = current.master
+                except Exception:
+                    break
+        return None
 
     def _can_reorder_current_view(self, controller: MetadataController, tree) -> bool:
         return self._library_ui_controller().can_reorder_current_view(
@@ -267,6 +380,53 @@ class LibraryWorkflowMixin:
             if tree is not None and tree is not active_tree:
                 tree.selection_clear(0, "end")
 
+    def _active_selection_tree(self):
+        for tree in (getattr(self, "tree_principal", None), getattr(self, "tree_nueva", None)):
+            if tree is not None and tree.selection():
+                return tree
+        preview_controller = getattr(self, "_preview_controller", None)
+        if preview_controller is not None:
+            tree = self._tree_for_controller(preview_controller)
+            if tree is not None:
+                return tree
+        for controller, tree in (
+            (getattr(self, "controller_principal", None), getattr(self, "tree_principal", None)),
+            (getattr(self, "controller_nueva", None), getattr(self, "tree_nueva", None)),
+        ):
+            if controller is not None and tree is not None and getattr(controller, "carpeta", ""):
+                return tree
+        return None
+
+    def _select_all_in_active_library(self) -> str:
+        tree = self._active_selection_tree()
+        if tree is None:
+            messagebox.showwarning(self.t("dialog.selection"), self.t("message.no_loaded_files"))
+            return "break"
+        children = tree.get_children()
+        if children:
+            tree.selection_set(*children)
+            tree.focus(children[0])
+            tree.see(children[0])
+        return "break"
+
+    def _deselect_all_in_active_library(self) -> None:
+        tree = self._active_selection_tree()
+        if tree is not None:
+            tree.selection_clear(0, "end")
+
+    def _invert_selection_in_active_library(self) -> None:
+        tree = self._active_selection_tree()
+        if tree is None:
+            messagebox.showwarning(self.t("dialog.selection"), self.t("message.no_loaded_files"))
+            return
+        selected = set(tree.selection())
+        next_selection = [item_id for item_id in tree.get_children() if item_id not in selected]
+        tree.selection_clear(0, "end")
+        if next_selection:
+            tree.selection_set(*next_selection)
+            tree.focus(next_selection[0])
+            tree.see(next_selection[0])
+
     def _load_song_preview(self, controller: MetadataController, filename: str) -> None:
         if not controller.carpeta or not filename:
             return
@@ -275,6 +435,10 @@ class LibraryWorkflowMixin:
         self._preview_filename = filename
         metadata = self.song_info.get_metadata(filepath, use_cache=False)
         if metadata:
+            cached = controller.get_track_info(filename)
+            if cached:
+                metadata = dict(metadata)
+                metadata["audio_quality"] = cached.audio_quality
             self.preview.update_preview(metadata)
         else:
             self.preview.show_error_state(self.t("preview.could_not_read"))

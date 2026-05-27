@@ -20,11 +20,13 @@ from ..controllers.playback_selection_controller import PlaybackSelectionControl
 from ..controllers.rename_controller import RenameController
 from ..controllers.selection_controller import SelectionController
 from ..controllers.ui_text_controller import UiTextController
+from ..controllers.undo_controller import UndoController
 from ..i18n import I18n
 from ..views.player_panel import PlayerControls
 from ..views.preview_panel import PreviewPanel
 from ..controllers.song_actions_controller import SongActions
 from ..services.song_info_service import SongInfo
+from ..services.online_metadata_service import MusicBrainzClient
 from ..ui_helpers.file_dialogs import FileHandler
 from .theme import StyleManager
 from ..views.library_panel import build_library_panel
@@ -48,6 +50,7 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         self.style_manager = StyleManager(root)
         self.file_handler = FileHandler(translator=self.t)
         self.song_info = SongInfo()
+        self.online_metadata = MusicBrainzClient()
         self.backup_controller = BackupController(self.t, self.song_info)
         self.cleanup_controller = CleanupController(self.song_info)
         self.cleanup_preset_controller = CleanupPresetController()
@@ -59,6 +62,7 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         self.metadata_dialog_controller = MetadataDialogController(self.t)
         self.playback_selection_controller = PlaybackSelectionController(self._filename_from_tree_item)
         self.ui_text_controller = UiTextController(self.t)
+        self.undo_controller = UndoController()
         self.library_ui_controller = LibraryUiController(
             translator=self.t,
             theme_colors=self.style_manager.get_theme_colors,
@@ -72,6 +76,9 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         self.controller_nueva = MetadataController(translator=self.t)
 
         self.current_theme = "light"
+        self.current_font_scale = 1.0
+        self.current_density = "normal"
+        self.current_accent_color = ""
         self._playback_controller = None
         self._playback_tree = None
         self._preview_controller: Optional[MetadataController] = None
@@ -81,11 +88,17 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         self._sort_widgets: list[tuple[ttk.Combobox, tk.StringVar, MetadataController]] = []
         self._library_panels: list[dict[str, object]] = []
         self.cleanup_presets: list[dict[str, object]] = []
+        self.playback_history: list[dict[str, object]] = []
+        self.recent_folders: list[dict[str, str]] = []
+        self.custom_themes: list[dict[str, object]] = []
+        self.onboarding_seen = False
+        self.fullscreen_enabled = False
 
         self._setup_main_menu()
         self._setup_ui()
         self._bind_events()
         self._load_config()
+        self.root.after(200, self._show_first_run_welcome)
 
     def _setup_ui(self) -> None:
         main_panel = ttk.Frame(self.root)
@@ -182,6 +195,8 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
                 else lambda _controller, _tree: self._move_to_main()
             ),
             on_clear_folder=self._clear_library_folder,
+            on_refresh_folder=self._refresh_library_folder,
+            on_delete_selected=self._delete_selected_from_library,
             extra_action_text="" if is_main else self.t("button.global_metadata"),
             on_extra_action=None if is_main else self._toggle_global_metadata_view,
             second_extra_action_text="" if is_main else self.t("button.prepare_folder"),
@@ -196,6 +211,7 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         self._ui_text_widgets[f"{prefix}_library_frame"] = bundle.frame
         self._ui_text_widgets[f"{prefix}_select_folder"] = bundle.select_button
         self._ui_text_widgets[f"{prefix}_close_folder"] = bundle.clear_button
+        self._ui_text_widgets[f"{prefix}_empty_state_button"] = bundle.empty_state_button
         self._ui_text_widgets[f"{prefix}_search_label"] = bundle.search_label
         self._ui_text_widgets[f"{prefix}_filter_label"] = bundle.filter_label
 
@@ -224,6 +240,7 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
             on_insert_position=self._insert_selected_at_position,
             on_rename_from_metadata=self._show_rename_from_metadata_preview,
             on_auto_cover=self._apply_auto_cover_from_folder,
+            on_search_online=self._search_online_metadata,
             on_apply_preset=self._apply_selected_cleanup_preset,
             on_create_preset=self._show_create_cleanup_preset_modal,
             on_delete_preset=self._delete_selected_cleanup_preset,
@@ -236,9 +253,14 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
     def _bind_events(self) -> None:
         self.root.drop_target_register(DND_FILES)
         self.root.dnd_bind("<<Drop>>", self._handle_drop)
+        self._register_library_drop_targets()
         self.root.bind("<Control-o>", lambda _event: self._load_folder(self.controller_principal, self.tree_principal))
         self.root.bind("<Control-n>", lambda _event: self._load_folder(self.controller_nueva, self.tree_nueva))
-        self.root.bind("<Escape>", lambda _event: self._on_close())
+        self.root.bind("<Control-a>", lambda _event: self._select_all_in_active_library())
+        self.root.bind("<Control-z>", lambda _event: self._undo_last_action())
+        self.root.bind("<Control-y>", lambda _event: self._redo_last_action())
+        self.root.bind("<F11>", lambda _event: self._toggle_fullscreen())
+        self.root.bind("<Escape>", lambda _event: self._exit_fullscreen() or self._on_close())
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _register_cover_drop_target(self) -> None:
@@ -248,6 +270,19 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
                 widget.dnd_bind("<<Drop>>", self._handle_cover_drop)
         except Exception as exc:
             self.logger.warning("Could not register cover drop target: %s", exc)
+
+    def _register_library_drop_targets(self) -> None:
+        for panel in self._library_panels:
+            controller = panel["controller"]
+            tree = panel["tree"]
+            for widget in (tree, panel.get("empty_state_frame")):
+                if widget is None:
+                    continue
+                try:
+                    widget.drop_target_register(DND_FILES)
+                    widget.dnd_bind("<<Drop>>", lambda event, c=controller, t=tree: self._handle_library_drop(event, c, t))
+                except Exception as exc:
+                    self.logger.warning("Could not register library drop target: %s", exc)
 
 def iniciar_app() -> None:
     root = TkinterDnD.Tk()

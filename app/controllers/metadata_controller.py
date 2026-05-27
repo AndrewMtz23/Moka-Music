@@ -14,8 +14,11 @@ from ..services.backup_service import (
     read_backup_payload,
     write_metadata_backup,
 )
-from ..services.library_service import filter_files as filter_library_files
+from ..services.library_service import duplicate_filenames, filter_files as filter_library_files
 from ..services.library_service import quality_report, sort_files
+from ..services.audio_quality_service import inspect_audio_quality
+from ..services.library_stats_service import build_library_stats
+from ..services.playback_history_service import normalize_history_path
 
 
 class MetadataController:
@@ -27,6 +30,8 @@ class MetadataController:
         self._metadata_cache: dict[str, TrackInfo] = {}
         self._cover_cache: dict[str, bool] = {}
         self._sort_mode = SortMode.FILENAME
+        self._played_paths: set[str] = set()
+        self._last_played_by_path: dict[str, str] = {}
         self.logger = logging.getLogger(__name__)
         self.metadata_editor = MetadataEditor()
 
@@ -96,6 +101,7 @@ class MetadataController:
             metadata=metadata,
             duration=AudioUtils.get_audio_duration(filepath),
             cover_art=None,
+            audio_quality=inspect_audio_quality(filepath),
         )
 
     def _get_file_metadata(self, filepath: str) -> dict[str, str]:
@@ -108,12 +114,19 @@ class MetadataController:
         self._sort_mode = mode
         self._apply_sorting()
 
+    def set_playback_history(self, played_paths: set[str], last_played_by_path: dict[str, str]) -> None:
+        self._played_paths = set(played_paths)
+        self._last_played_by_path = dict(last_played_by_path)
+        if self._sort_mode == SortMode.LAST_PLAYED:
+            self._apply_sorting()
+
     def _apply_sorting(self) -> None:
         self.archivos = sort_files(
             self.archivos,
             self._metadata_cache,
             self._sort_mode,
             self._get_file_mtime,
+            self._last_played_for_file,
         )
 
     def _get_file_mtime(self, filename: str) -> float:
@@ -121,6 +134,9 @@ class MetadataController:
             return os.path.getmtime(os.path.join(self.carpeta, filename))
         except OSError:
             return 0.0
+
+    def _last_played_for_file(self, filename: str) -> str:
+        return self._last_played_by_path.get(normalize_history_path(os.path.join(self.carpeta, filename)), "")
 
     def aplicar_cambios(self, metadatos: dict[str, str]) -> tuple[int, list[str]]:
         if not self.archivos:
@@ -345,6 +361,7 @@ class MetadataController:
             query,
             mode,
             has_cover_art=self._has_cover_art,
+            played_paths=self._played_paths,
         )
 
     def _has_cover_art(self, filename: str) -> bool:
@@ -361,3 +378,36 @@ class MetadataController:
 
     def get_quality_report(self) -> dict[str, int]:
         return quality_report(self.archivos, self._metadata_cache)
+
+    def get_library_stats(self) -> dict[str, object]:
+        return build_library_stats(self.archivos, self._metadata_cache)
+
+    def metadata_cache_snapshot(self) -> dict[str, TrackInfo]:
+        return dict(self._metadata_cache)
+
+    def duplicate_filenames(self) -> set[str]:
+        return duplicate_filenames(self.archivos, self._metadata_cache)
+
+    def issue_keys_for_file(self, filename: str, duplicate_set: Optional[set[str]] = None) -> list[str]:
+        cached = self.get_track_info(filename)
+        metadata = cached.metadata if cached else {}
+        issues: list[str] = []
+        if not str(metadata.get("artist", "") or "").strip():
+            issues.append("missing_artist")
+        if not str(metadata.get("album", "") or "").strip():
+            issues.append("missing_album")
+        if not str(metadata.get("year", "") or "").strip():
+            issues.append("missing_year")
+        track_value = str(metadata.get("track_number", "") or "").strip()
+        if not track_value or track_value == "0":
+            issues.append("missing_track")
+        if not self._has_cover_art(filename):
+            issues.append("missing_cover")
+        if filename in (duplicate_set or set()):
+            issues.append("duplicate")
+        quality = cached.audio_quality if cached else {}
+        if quality.get("low_bitrate"):
+            issues.append("low_bitrate")
+        if quality.get("possibly_corrupt"):
+            issues.append("possibly_corrupt")
+        return issues

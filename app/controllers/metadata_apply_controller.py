@@ -1,6 +1,9 @@
 import os
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
+
+
+ProgressCallback = Callable[[int, int, str], bool]
 
 
 @dataclass
@@ -112,27 +115,53 @@ class MetadataApplyController:
         song_info,
         preview_controller,
         preview_filename: Optional[str],
+        progress_callback: ProgressCallback | None = None,
     ) -> BatchMetadataApplyResult:
         total_success = 0
         all_errors: list[str] = []
         affected_preview = False
         changed_pairs: set[tuple[int, int]] = set()
+        total = self.selected_count(groups)
+        completed = 0
 
         for controller, tree, filenames in groups:
-            success_count, errors = controller.aplicar_cambios_a_archivos(
-                filenames,
-                metadata,
-                controller.portada_path,
-            )
-            total_success += success_count
-            all_errors.extend(errors)
-            if success_count:
-                changed_pairs.add((id(controller), id(tree)))
+            if progress_callback is None:
+                success_count, errors = controller.aplicar_cambios_a_archivos(
+                    filenames,
+                    metadata,
+                    controller.portada_path,
+                )
+                total_success += success_count
+                all_errors.extend(errors)
+                if success_count:
+                    changed_pairs.add((id(controller), id(tree)))
+                for filename in filenames:
+                    if controller.carpeta:
+                        song_info.invalidate(os.path.join(controller.carpeta, filename))
+                    if controller is preview_controller and filename == preview_filename:
+                        affected_preview = True
+                continue
             for filename in filenames:
+                if not progress_callback(completed, total, filename):
+                    all_errors.append("Operacion cancelada por el usuario.")
+                    return BatchMetadataApplyResult(
+                        success_count=total_success,
+                        errors=all_errors,
+                        affected_preview=affected_preview,
+                        changed_pairs=changed_pairs,
+                    )
+                result = controller.aplicar_cambios_a_archivo(filename, metadata, controller.portada_path)
+                completed += 1
+                if getattr(result, "success", False):
+                    total_success += 1
+                    changed_pairs.add((id(controller), id(tree)))
+                else:
+                    all_errors.extend(getattr(result, "errors", []) or [getattr(result, "message", filename)])
                 if controller.carpeta:
                     song_info.invalidate(os.path.join(controller.carpeta, filename))
                 if controller is preview_controller and filename == preview_filename:
                     affected_preview = True
+                progress_callback(completed, total, filename)
 
         return BatchMetadataApplyResult(
             success_count=total_success,
@@ -141,9 +170,36 @@ class MetadataApplyController:
             changed_pairs=changed_pairs,
         )
 
-    def apply_all(self, *, controller, metadata: dict[str, str], song_info) -> tuple[int, list[str]]:
-        success_count, errors = controller.aplicar_cambios(metadata)
-        if success_count and controller.carpeta:
-            for filename in controller.archivos:
+    def apply_all(
+        self,
+        *,
+        controller,
+        metadata: dict[str, str],
+        song_info,
+        progress_callback: ProgressCallback | None = None,
+    ) -> tuple[int, list[str]]:
+        if progress_callback is None:
+            success_count, errors = controller.aplicar_cambios(metadata)
+            if success_count and controller.carpeta:
+                for filename in controller.archivos:
+                    song_info.invalidate(os.path.join(controller.carpeta, filename))
+            return success_count, errors
+
+        success_count = 0
+        errors: list[str] = []
+        filenames = controller.archivos.copy()
+        total = len(filenames)
+        for completed, filename in enumerate(filenames):
+            if progress_callback and not progress_callback(completed, total, filename):
+                errors.append("Operacion cancelada por el usuario.")
+                break
+            result = controller.aplicar_cambios_a_archivo(filename, metadata, controller.portada_path)
+            if getattr(result, "success", False):
+                success_count += 1
+            else:
+                errors.extend(getattr(result, "errors", []) or [getattr(result, "message", filename)])
+            if controller.carpeta:
                 song_info.invalidate(os.path.join(controller.carpeta, filename))
+            if progress_callback:
+                progress_callback(completed + 1, total, filename)
         return success_count, errors

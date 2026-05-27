@@ -8,6 +8,7 @@ from typing import Any, Callable, Optional
 from PIL import Image, ImageDraw, ImageFont, ImageTk
 
 from ..i18n import I18n
+from ..services.audio_quality_service import format_audio_quality
 from ..utils.text_cleanup import remove_feature_text
 
 
@@ -111,6 +112,7 @@ class PreviewPanel(ttk.Frame):
             ("preview.track", "track_number"),
             ("preview.comment", "comment"),
             ("preview.duration", "duration"),
+            ("preview.audio_quality", "audio_quality"),
             ("preview.file", "file_name"),
         ]
 
@@ -253,6 +255,7 @@ class PreviewPanel(ttk.Frame):
             "track_number": "preview.track",
             "comment": "preview.comment",
             "duration": "preview.duration",
+            "audio_quality": "preview.audio_quality",
             "file_name": "preview.file",
         }
         for field_name, label in self.field_name_labels.items():
@@ -304,6 +307,7 @@ class PreviewPanel(ttk.Frame):
             "track_number": str(song_data.get("track_number", "")),
             "comment": song_data.get("comment", ""),
             "duration": self._format_duration(song_data.get("duration", 0)),
+            "audio_quality": format_audio_quality(song_data.get("audio_quality", {})),
             "file_name": song_data.get("file_name", ""),
         }
 

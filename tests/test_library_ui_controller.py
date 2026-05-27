@@ -68,6 +68,8 @@ def theme_colors():
         "text_secondary": "#999999",
         "highlight": "#ffffff",
         "highlight_text": "#000000",
+        "warning": "#ffcc00",
+        "error": "#ff0000",
     }
 
 
@@ -89,11 +91,18 @@ class LibraryUiControllerTests(unittest.TestCase):
                 "song.mp3": TrackInfo(
                     "song.mp3",
                     str(Path(temp_dir) / "song.mp3"),
-                    {"title": "Tema", "artist": "Artista"},
+                    {
+                        "title": "Tema",
+                        "artist": "Artista",
+                        "album": "Album",
+                        "year": "2026",
+                        "track_number": "1",
+                    },
                     0.0,
                     None,
                 )
             }
+            controller._cover_cache = {"song.mp3": True}
             tree = FakeTree()
 
             self.make_controller().update_treeview(
@@ -166,6 +175,75 @@ class LibraryUiControllerTests(unittest.TestCase):
         self.assertFalse(
             ui_controller.can_reorder_current_view(controller=controller, tree=tree, panel=filtered_panel)
         )
+
+    def test_update_treeview_marks_metadata_cover_and_duplicate_issues(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            controller = MetadataController()
+            controller.carpeta = temp_dir
+            controller.archivos = ["one.mp3", "two.mp3"]
+            controller._metadata_cache = {
+                "one.mp3": TrackInfo(
+                    "one.mp3",
+                    str(Path(temp_dir) / "one.mp3"),
+                    {"title": "Tema", "artist": "", "album": "", "year": "", "track_number": "0"},
+                    0.0,
+                    None,
+                ),
+                "two.mp3": TrackInfo(
+                    "two.mp3",
+                    str(Path(temp_dir) / "two.mp3"),
+                    {"title": "Tema", "artist": "", "album": "", "year": "", "track_number": "0"},
+                    0.0,
+                    None,
+                ),
+            }
+            tree = FakeTree()
+
+            self.make_controller().update_treeview(
+                tree=tree,
+                files=["one.mp3"],
+                controller=controller,
+                panel=None,
+            )
+
+            self.assertTrue(tree.items[0]["text"].endswith("[META] [COVER] [DUP]"))
+            self.assertIn("issue_missing_artist", tree.items[0]["tags"])
+            self.assertIn("issue_missing_cover", tree.items[0]["tags"])
+            self.assertIn("issue_duplicate", tree.items[0]["tags"])
+
+    def test_update_treeview_shows_bitrate_badge_for_quality_filters(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            controller = MetadataController()
+            controller.carpeta = temp_dir
+            controller.archivos = ["song.mp3"]
+            controller._metadata_cache = {
+                "song.mp3": TrackInfo(
+                    "song.mp3",
+                    str(Path(temp_dir) / "song.mp3"),
+                    {
+                        "title": "Tema",
+                        "artist": "Artista",
+                        "album": "Album",
+                        "year": "2026",
+                        "track_number": "1",
+                    },
+                    0.0,
+                    None,
+                    {"bitrate_kbps": 128},
+                )
+            }
+            controller._cover_cache = {"song.mp3": True}
+            tree = FakeTree()
+            panel = {"filter_mode": FilterMode.BITRATE_128}
+
+            self.make_controller().update_treeview(
+                tree=tree,
+                files=["song.mp3"],
+                controller=controller,
+                panel=panel,
+            )
+
+            self.assertEqual(tree.items[0]["text"], "Artista - Tema [128 kbps]")
 
 
 if __name__ == "__main__":

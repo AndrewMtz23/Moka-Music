@@ -6,6 +6,7 @@ from tkinter import messagebox, simpledialog
 from ..controllers.add_music_controller import abrir_selector_archivo, agregar_a_lista
 from ..controllers.metadata_controller import MetadataController
 from ..models import SortMode
+from ..services.playback_history_service import record_playback
 from ..utils.ui_formatting import format_action_error
 from ..views.modals.incoming_folder_guide_modal import show_incoming_folder_guide
 
@@ -21,7 +22,19 @@ class InteractionWorkflowMixin:
             self._playback_controller = controller
             self._playback_tree = tree
             self.player.play()
+            self._record_playback(controller, selected.filename, selected.filepath)
             self.logger.info("Playing %s", selected.filename)
+
+    def _record_playback(self, controller: MetadataController, filename: str, filepath: str) -> None:
+        track = controller.get_track_info(filename)
+        self.playback_history = record_playback(
+            self.playback_history,
+            filepath=filepath,
+            filename=filename,
+            metadata=track.metadata if track else {},
+        )
+        self._sync_playback_history_to_controllers()
+        self._save_config()
 
     def _play_relative_track(self, offset: int) -> None:
         tree = self._playback_tree
@@ -101,6 +114,34 @@ class InteractionWorkflowMixin:
             moved_filename = result.data.get("filename")
             if isinstance(moved_filename, str):
                 self._position_moved_song_in_main(moved_filename)
+
+    def _move_between_libraries_by_drag(
+        self,
+        origin_controller: MetadataController,
+        origin_tree,
+        destination_controller: MetadataController,
+        destination_tree,
+        filename: str,
+    ) -> bool:
+        if not destination_controller.carpeta:
+            messagebox.showwarning(self.t("dialog.no_destination"), self.t("action.no_destination"))
+            return False
+        result = self.song_actions.mover_cancion(
+            origin_controller,
+            destination_controller,
+            filename,
+            origin_tree,
+            destination_tree,
+            self.preview,
+        )
+        self._handle_action_result(result)
+        if result.success and result.data:
+            moved_filename = result.data.get("filename")
+            if isinstance(moved_filename, str):
+                self._select_filename_in_tree(destination_tree, moved_filename)
+                self._load_song_preview(destination_controller, moved_filename)
+            return True
+        return False
 
     def _position_moved_song_in_main(self, filename: str) -> None:
         if filename not in self.controller_principal.archivos:
@@ -223,6 +264,7 @@ class InteractionWorkflowMixin:
             song_info=self.song_info,
         )
         if apply_result.success:
+            self._record_undo_action("undo.metadata")
             self._load_song_preview(controller, filename)
             self._refresh_changed_library_pairs([(controller, tree, [filename])], apply_result.changed_pairs)
             messagebox.showinfo(self.t("dialog.done"), self.t("message.metadata_applied"))
@@ -268,16 +310,29 @@ class InteractionWorkflowMixin:
         if not backup_path:
             return
 
-        success_count, errors = self._metadata_apply_controller().apply_all(
-            controller=controller,
-            metadata=metadata,
-            song_info=self.song_info,
+        progress = self._begin_progress(
+            title=self.t("progress.metadata_title"),
+            message=self.t("progress.metadata_body"),
+            total=len(filenames),
         )
+        try:
+            success_count, errors = self._metadata_apply_controller().apply_all(
+                controller=controller,
+                metadata=metadata,
+                song_info=self.song_info,
+                progress_callback=progress.update,
+            )
+        finally:
+            progress.close()
         if success_count:
+            self._record_undo_action("undo.metadata")
             message = self.t("message.updated_files", count=success_count)
             message += f"\n{self.t('message.backup_created', path=backup_path)}"
             if errors:
                 message += self.t("message.errors_count", count=len(errors))
+                self._show_toast(self.t("toast.partial"), kind="warning")
+            else:
+                self._show_toast(self.t("toast.done"), kind="success")
             messagebox.showinfo(self.t("dialog.done"), message)
             selection = active_tree.selection()
             if selection:
@@ -340,6 +395,67 @@ class InteractionWorkflowMixin:
         except Exception as exc:
             self.logger.error("Error handling drop event: %s", exc)
             messagebox.showerror(self.t("dialog.error"), self.t("message.could_not_process_drop", error=exc))
+
+    def _handle_library_drop(self, event, controller: MetadataController, tree) -> None:
+        try:
+            payload = self._drop_controller().payload_from_raw(event.data, splitlist=self.root.tk.splitlist)
+            library_name = self._library_debug_name(controller, tree)
+            library_label = (
+                self.t("panel.main_library")
+                if library_name == "main_library"
+                else self.t("panel.incoming_library")
+            )
+
+            for folder in payload.folders:
+                folder_path = Path(folder)
+                if messagebox.askyesno(
+                    self.t("dialog.folder_detected"),
+                    self.t("message.load_folder_into_library", name=folder_path.name, library=library_label),
+                ):
+                    self._load_folder(controller, tree, folder=folder)
+
+            if payload.image_files:
+                targets = self._drop_cover_targets(controller, tree, getattr(event, "y", 0))
+                self._apply_cover_to_targets(payload.image_files[0], targets=targets, apply_entire_folder=False)
+                return
+
+            if payload.audio_files:
+                if not controller.carpeta:
+                    messagebox.showwarning(
+                        self.t("dialog.no_destination"),
+                        self.t("message.load_library_before_drop"),
+                    )
+                    return
+                result = self._drop_controller().add_audio_files(
+                    payload.audio_files,
+                    controller=controller,
+                    song_info=self.song_info,
+                    translator=self.t,
+                )
+                if result.added:
+                    self._refresh_library_tree(controller, tree)
+                    messagebox.showinfo(
+                        self.t("dialog.files_added"),
+                        self.t("message.added_dropped_files", count=result.added),
+                    )
+        except Exception as exc:
+            self.logger.error("Error handling library drop event: %s", exc)
+            messagebox.showerror(self.t("dialog.error"), self.t("message.could_not_process_drop", error=exc))
+
+    def _drop_cover_targets(self, controller: MetadataController, tree, y: int):
+        filenames = [
+            self._filename_from_tree_item(tree.item(item_id))
+            for item_id in tree.selection()
+            if self._filename_from_tree_item(tree.item(item_id))
+        ]
+        if not filenames:
+            item_id = tree.identify_row(y)
+            if item_id:
+                filename = self._filename_from_tree_item(tree.item(item_id))
+                if filename:
+                    tree.selection_set(item_id)
+                    filenames = [filename]
+        return [(controller, tree, filenames)] if filenames else []
 
     def _handle_action_result(self, result) -> None:
         if result is None:

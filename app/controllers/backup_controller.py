@@ -1,10 +1,11 @@
 import os
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
 from ..models import ActionResult
-from ..services.backup_service import iter_backup_payloads
+from ..services.backup_service import iter_backup_payloads, read_backup_payload
 from ..utils.ui_formatting import backup_action_label
 
 
@@ -23,6 +24,7 @@ class BackupController:
     def __init__(self, translator: Callable[..., str], song_info=None) -> None:
         self.t = translator
         self.song_info = song_info
+        self.logger = logging.getLogger(__name__)
         self.last_backup_path: Optional[Path] = None
         self.last_backup_paths: list[Path] = []
 
@@ -118,6 +120,37 @@ class BackupController:
             errors=errors,
             refreshed_pairs=refreshed_pairs,
         )
+
+    def create_current_snapshots_for_paths(
+        self,
+        backup_paths: list[Path],
+        controller_tree_pairs: list[ControllerTreePair],
+        metadata: dict[str, str],
+    ) -> list[Path]:
+        snapshots: list[Path] = []
+        for backup_path in backup_paths:
+            backup_folder = self._backup_folder(backup_path)
+            if not backup_folder:
+                continue
+            for controller, _tree in controller_tree_pairs:
+                if not controller.carpeta:
+                    continue
+                if os.path.normcase(backup_folder) != os.path.normcase(controller.carpeta):
+                    continue
+                try:
+                    snapshots.append(controller.crear_respaldo_metadatos(metadata, controller.archivos.copy()))
+                except Exception as exc:
+                    self.logger.warning("Could not create undo snapshot: %s", exc)
+                break
+        return snapshots
+
+    def _backup_folder(self, backup_path: Path) -> str:
+        try:
+            payload = read_backup_payload(backup_path)
+            return str(payload.get("library_folder", "") or "")
+        except Exception as exc:
+            self.logger.warning("Could not inspect backup folder: %s", exc)
+            return ""
 
     def _invalidate_controller(self, controller) -> None:
         if not self.song_info:

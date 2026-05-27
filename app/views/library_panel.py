@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
 import tkinter as tk
 from tkinter import ttk
@@ -24,6 +25,11 @@ class LibraryPanelBundle:
     result_label: ttk.Label
     action_button: ttk.Button
     clear_button: ttk.Button
+    refresh_button: ttk.Button
+    delete_button: ttk.Button
+    empty_state_frame: tk.Frame
+    empty_state_label: tk.Label
+    empty_state_button: ttk.Button
     extra_button: ttk.Button | None = None
     second_extra_button: ttk.Button | None = None
 
@@ -38,6 +44,9 @@ class LibraryPanelBundle:
             "filter_mode": FilterMode.ALL,
             "filter_menu": self.filter_menu,
             "result_label": self.result_label,
+            "empty_state_frame": self.empty_state_frame,
+            "empty_state_label": self.empty_state_label,
+            "empty_state_button": self.empty_state_button,
         }
 
 
@@ -61,6 +70,8 @@ def build_library_panel(
     on_refresh: Callable[[MetadataController, LibraryListbox], None],
     on_action: Callable[[MetadataController, LibraryListbox], None],
     on_clear_folder: Callable[[MetadataController, LibraryListbox], None],
+    on_refresh_folder: Callable[[MetadataController, LibraryListbox], None],
+    on_delete_selected: Callable[[MetadataController, LibraryListbox], None],
     extra_action_text: str = "",
     on_extra_action: Callable[[], None] | None = None,
     second_extra_action_text: str = "",
@@ -97,6 +108,24 @@ def build_library_panel(
         style="Secondary.TButton",
     )
     clear_button.pack(side="left", padx=(0, 5))
+
+    refresh_button = ttk.Button(
+        toolbar,
+        text="↻",
+        command=lambda: on_refresh_folder(controller, tree),
+        width=3,
+        style="Secondary.TButton",
+    )
+    refresh_button.pack(side="left", padx=(0, 5))
+
+    delete_button = ttk.Button(
+        toolbar,
+        text="🗑",
+        command=lambda: on_delete_selected(controller, tree),
+        width=3,
+        style="Secondary.TButton",
+    )
+    delete_button.pack(side="left", padx=(0, 5))
 
     extra_button = None
     if extra_action_text and on_extra_action is not None:
@@ -180,6 +209,47 @@ def build_library_panel(
     scrollbar.grid(row=0, column=1, sticky="ns")
     horizontal_scrollbar.grid(row=1, column=0, sticky="ew")
 
+    empty_state_frame = tk.Frame(scrollbar_frame, background=colors["surface"], borderwidth=0)
+    empty_state_frame.grid(row=0, column=0, sticky="nsew")
+    empty_state_frame.columnconfigure(0, weight=1)
+    empty_state_frame.rowconfigure(0, weight=1)
+
+    empty_content = tk.Frame(empty_state_frame, background=colors["surface"], borderwidth=0)
+    empty_content.grid(row=0, column=0, padx=18, pady=18)
+
+    logo_path = Path(__file__).resolve().parents[2] / "assets" / "logo.png"
+    empty_state_image = None
+    if logo_path.exists():
+        try:
+            empty_state_image = tk.PhotoImage(file=str(logo_path)).subsample(6, 6)
+        except tk.TclError:
+            empty_state_image = None
+
+    if empty_state_image is not None:
+        logo_label = tk.Label(empty_content, image=empty_state_image, background=colors["surface"])
+        logo_label.image = empty_state_image
+        logo_label.pack(pady=(0, 10))
+
+    empty_state_label = tk.Label(
+        empty_content,
+        text=t("library.empty.no_folder"),
+        background=colors["surface"],
+        foreground=colors["text_secondary"],
+        font=style_manager.base_font,
+        justify="center",
+        wraplength=320,
+    )
+    empty_state_label.pack(pady=(0, 12))
+
+    empty_state_button = ttk.Button(
+        empty_content,
+        text=t("button.select_folder"),
+        command=lambda: on_select_folder(controller, tree),
+        style="Accent.TButton",
+    )
+    empty_state_button.pack()
+    empty_state_frame.grid_remove()
+
     tree.bind("<<TreeviewSelect>>", lambda _event: on_song_select(controller, tree))
     tree.bind("<Double-1>", lambda _event: on_play_selected(controller, tree))
     tree.bind("<ButtonPress-1>", lambda event: on_start_reorder(event, controller, tree), add="+")
@@ -212,6 +282,11 @@ def build_library_panel(
         result_label=result_label,
         action_button=action_button,
         clear_button=clear_button,
+        refresh_button=refresh_button,
+        delete_button=delete_button,
+        empty_state_frame=empty_state_frame,
+        empty_state_label=empty_state_label,
+        empty_state_button=empty_state_button,
         extra_button=extra_button,
         second_extra_button=second_extra_button,
     )

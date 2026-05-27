@@ -1,11 +1,21 @@
 import unittest
 
 from app.models import FilterMode, SortMode, TrackInfo
-from app.services.library_service import filter_files, natural_filename_key, quality_report, sort_files
+from app.services.library_service import (
+    BITRATE_128_MAX_KBPS,
+    BITRATE_256_MAX_KBPS,
+    BITRATE_256_MIN_KBPS,
+    BITRATE_320_MIN_KBPS,
+    filter_files,
+    natural_filename_key,
+    quality_report,
+    sort_files,
+)
+from app.services.playback_history_service import normalize_history_path
 
 
-def track(filename: str, metadata: dict[str, str], duration: float = 0.0) -> TrackInfo:
-    return TrackInfo(filename, filename, metadata, duration, None)
+def track(filename: str, metadata: dict[str, str], duration: float = 0.0, quality=None) -> TrackInfo:
+    return TrackInfo(filename, filename, metadata, duration, None, quality or {})
 
 
 class LibraryServiceTests(unittest.TestCase):
@@ -22,6 +32,7 @@ class LibraryServiceTests(unittest.TestCase):
                     "track_number": "2",
                 },
                 40.0,
+                {"bitrate_kbps": 96, "low_bitrate": True},
             ),
             "a.mp3": track(
                 "a.mp3",
@@ -33,6 +44,7 @@ class LibraryServiceTests(unittest.TestCase):
                     "track_number": "1",
                 },
                 20.0,
+                {"bitrate_kbps": 255},
             ),
             "c.mp3": track(
                 "c.mp3",
@@ -44,6 +56,7 @@ class LibraryServiceTests(unittest.TestCase):
                     "track_number": "0",
                 },
                 10.0,
+                {"bitrate_kbps": 320},
             ),
             "d.mp3": track(
                 "d.mp3",
@@ -55,6 +68,7 @@ class LibraryServiceTests(unittest.TestCase):
                     "track_number": "10",
                 },
                 30.0,
+                {"possibly_corrupt": True},
             ),
         }
 
@@ -70,6 +84,10 @@ class LibraryServiceTests(unittest.TestCase):
         self.assertEqual(
             sort_files(self.files, self.cache, SortMode.DURATION, lambda _name: 0.0),
             ["c.mp3", "a.mp3", "d.mp3", "b.mp3"],
+        )
+        self.assertEqual(
+            sort_files(self.files, self.cache, SortMode.BITRATE, lambda _name: 0.0),
+            ["b.mp3", "a.mp3", "c.mp3", "d.mp3"],
         )
         self.assertEqual(
             sort_files(self.files, self.cache, SortMode.MANUAL, lambda _name: 0.0),
@@ -100,6 +118,11 @@ class LibraryServiceTests(unittest.TestCase):
         self.assertEqual(filter_files(self.files, self.cache, mode=FilterMode.MISSING_ARTIST), ["c.mp3"])
         self.assertEqual(filter_files(self.files, self.cache, mode=FilterMode.MISSING_TRACK), ["c.mp3"])
         self.assertEqual(filter_files(self.files, self.cache, mode=FilterMode.DUPLICATES), ["b.mp3", "a.mp3"])
+        self.assertEqual(filter_files(self.files, self.cache, mode=FilterMode.LOW_BITRATE), ["b.mp3"])
+        self.assertEqual(filter_files(self.files, self.cache, mode=FilterMode.BITRATE_128), ["b.mp3"])
+        self.assertEqual(filter_files(self.files, self.cache, mode=FilterMode.BITRATE_256), ["a.mp3"])
+        self.assertEqual(filter_files(self.files, self.cache, mode=FilterMode.BITRATE_320), ["c.mp3"])
+        self.assertEqual(filter_files(self.files, self.cache, mode=FilterMode.POSSIBLY_CORRUPT), ["d.mp3"])
         self.assertEqual(
             filter_files(
                 self.files,
@@ -108,6 +131,42 @@ class LibraryServiceTests(unittest.TestCase):
                 has_cover_art=lambda filename: filename in {"a.mp3", "d.mp3"},
             ),
             ["b.mp3", "c.mp3"],
+        )
+        self.assertEqual(
+            filter_files(
+                self.files,
+                self.cache,
+                mode=FilterMode.UNPLAYED,
+                played_paths={normalize_history_path("a.mp3"), normalize_history_path("d.mp3")},
+            ),
+            ["b.mp3", "c.mp3"],
+        )
+
+    def test_bitrate_filters_use_tolerant_ranges(self):
+        files = ["low.mp3", "mid_start.mp3", "mid_end.mp3", "high.mp3", "unknown.mp3", "invalid.mp3"]
+        cache = {
+            "low.mp3": track("low.mp3", {}, quality={"bitrate_kbps": BITRATE_128_MAX_KBPS}),
+            "mid_start.mp3": track("mid_start.mp3", {}, quality={"bitrate_kbps": BITRATE_256_MIN_KBPS}),
+            "mid_end.mp3": track("mid_end.mp3", {}, quality={"bitrate_kbps": BITRATE_256_MAX_KBPS}),
+            "high.mp3": track("high.mp3", {}, quality={"bitrate_kbps": BITRATE_320_MIN_KBPS}),
+            "unknown.mp3": track("unknown.mp3", {}, quality={"bitrate_kbps": 0}),
+            "invalid.mp3": track("invalid.mp3", {}, quality={"bitrate_kbps": "not-a-number"}),
+        }
+
+        self.assertEqual(filter_files(files, cache, mode=FilterMode.BITRATE_128), ["low.mp3"])
+        self.assertEqual(filter_files(files, cache, mode=FilterMode.BITRATE_256), ["mid_start.mp3", "mid_end.mp3"])
+        self.assertEqual(filter_files(files, cache, mode=FilterMode.BITRATE_320), ["high.mp3"])
+
+    def test_sort_files_can_use_last_played_history(self):
+        self.assertEqual(
+            sort_files(
+                self.files,
+                self.cache,
+                SortMode.LAST_PLAYED,
+                lambda _name: 0.0,
+                lambda name: {"a.mp3": "2026-05-26T10:00:00", "d.mp3": "2026-05-26T11:00:00"}.get(name, ""),
+            ),
+            ["d.mp3", "a.mp3", "c.mp3", "b.mp3"],
         )
 
     def test_quality_report_counts_missing_fields_and_duplicates(self):
@@ -120,6 +179,17 @@ class LibraryServiceTests(unittest.TestCase):
         self.assertEqual(report["missing_track"], 1)
         self.assertEqual(report["duplicate_groups"], 1)
         self.assertEqual(report["duplicate_tracks"], 2)
+        self.assertEqual(report["low_bitrate"], 1)
+        self.assertEqual(report["possibly_corrupt"], 1)
+
+    def test_duplicate_filter_uses_fuzzy_matching(self):
+        files = ["one.mp3", "two.mp3"]
+        cache = {
+            "one.mp3": track("one.mp3", {"title": "The Song", "artist": "Artist"}),
+            "two.mp3": track("two.mp3", {"title": "The Song Remastered", "artist": "Artist"}),
+        }
+
+        self.assertEqual(filter_files(files, cache, mode=FilterMode.DUPLICATES), files)
 
 
 if __name__ == "__main__":

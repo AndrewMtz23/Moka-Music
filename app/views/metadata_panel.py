@@ -26,6 +26,7 @@ def build_metadata_panel(
     on_insert_position: Callable[[], None],
     on_rename_from_metadata: Callable[[], None],
     on_auto_cover: Callable[[], None],
+    on_search_online: Callable[[], None],
     on_apply_preset: Callable[[], None],
     on_create_preset: Callable[[], None],
     on_delete_preset: Callable[[], None],
@@ -137,6 +138,7 @@ def build_metadata_panel(
         ("quick_copy_artist_button", "quick_actions.copy_artist", lambda: on_quick_cleanup("copy_artist")),
         ("quick_rename_metadata_button", "quick_actions.rename_from_metadata", on_rename_from_metadata),
         ("quick_auto_cover_button", "quick_actions.auto_cover", on_auto_cover),
+        ("quick_search_online_button", "quick_actions.search_online", on_search_online),
     ]
     for index, (name, text_key, command) in enumerate(quick_buttons):
         button = ttk.Button(
@@ -150,7 +152,7 @@ def build_metadata_panel(
         text_widgets[name] = button
 
     preset_row = ttk.Frame(quick_frame)
-    preset_row.grid(row=3, column=0, columnspan=3, sticky="ew", padx=4, pady=(8, 4))
+    preset_row.grid(row=(len(quick_buttons) + 2) // 3, column=0, columnspan=3, sticky="ew", padx=4, pady=(8, 4))
     preset_row.columnconfigure(1, weight=1)
 
     preset_label = ttk.Label(preset_row, text=t("presets.label"))

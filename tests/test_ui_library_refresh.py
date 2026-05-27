@@ -23,6 +23,8 @@ class FakeStyleManager:
             "text_secondary": "#666666",
             "highlight": "#111111",
             "highlight_text": "#ffffff",
+            "warning": "#92400e",
+            "error": "#b91c1c",
         }
 
 
@@ -109,6 +111,23 @@ class UiLibraryRefreshTests(unittest.TestCase):
             controller = MetadataController()
             controller.carpeta = temp_dir
             controller.archivos = ["B Song.mp3", "A Song.mp3"]
+            controller._metadata_cache = {
+                "B Song.mp3": TrackInfo(
+                    "B Song.mp3",
+                    str(Path(temp_dir) / "B Song.mp3"),
+                    {"title": "B Song", "artist": "B", "album": "Album", "year": "2026", "track_number": "1"},
+                    0.0,
+                    None,
+                ),
+                "A Song.mp3": TrackInfo(
+                    "A Song.mp3",
+                    str(Path(temp_dir) / "A Song.mp3"),
+                    {"title": "A Song", "artist": "A", "album": "Album", "year": "2026", "track_number": "2"},
+                    0.0,
+                    None,
+                ),
+            }
+            controller._cover_cache = {"B Song.mp3": True, "A Song.mp3": True}
             tree = FakeTree()
             app, panel = self.make_panel(controller, tree)
 

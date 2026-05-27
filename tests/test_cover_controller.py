@@ -101,6 +101,27 @@ class CoverControllerTests(unittest.TestCase):
                 [str(folder / "one.mp3"), str(folder / "two.mp3"), str(folder / "three.mp3")],
             )
 
+    def test_apply_manual_cover_can_target_only_selected_files(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            source_cover = folder / "selected-cover.png"
+            Image.new("RGB", (20, 20), color="blue").save(source_cover)
+            controller = FakeController(folder)
+            song_info = FakeSongInfo()
+
+            result = CoverController().apply_manual_cover(
+                targets=[(controller, "tree", ["two.mp3"])],
+                cover_path=str(source_cover),
+                song_info=song_info,
+                preview_controller=controller,
+                preview_filename="two.mp3",
+                apply_entire_folder=False,
+            )
+
+            self.assertEqual(result.success_count, 1)
+            self.assertEqual(controller.applied[0][0], ["two.mp3"])
+            self.assertEqual(song_info.invalidated, [str(folder / "two.mp3")])
+
 
 if __name__ == "__main__":
     unittest.main()
