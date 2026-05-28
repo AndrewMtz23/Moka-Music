@@ -23,6 +23,20 @@ Si `python` no existe en tu PATH, instala Python 3.10+ y activa la opcion de agr
 python main.py
 ```
 
+## Ejecutable Windows
+
+El proyecto incluye una configuracion de PyInstaller para generar una version ejecutable de escritorio.
+
+```powershell
+.\.venv\Scripts\pyinstaller.exe MokaMusic.spec --noconfirm
+```
+
+El resultado queda en:
+
+```text
+dist/MokaMusic/MokaMusic.exe
+```
+
 ## Flujo principal
 
 1. Abre una carpeta en `Biblioteca principal` y, si hace falta, otra en `Biblioteca entrante`.
@@ -30,8 +44,9 @@ python main.py
 3. Usa `Editar metadata...` para modificar una cancion o aplicar campos seleccionados a varias.
 4. En `Biblioteca entrante`, usa `Metadatos globales` para preparar musica nueva antes de moverla a la playlist principal.
 5. Usa `Preparar playlist` para numerar pistas y renombrar archivos con el formato `001 - Artista - Titulo`.
-6. Reproduce la seleccion con el panel inferior y revisa tiempo, progreso, volumen y modo de reproduccion.
-7. Antes de cambios masivos, la app genera respaldos que puedes restaurar desde `Herramientas`.
+6. Revisa calidad, duplicados, portadas faltantes y metadata desde los reportes de `Herramientas`.
+7. Reproduce la seleccion con el reproductor inferior redisenado, con portada tipo vinilo, progreso, volumen y controles principales.
+8. Antes de cambios masivos, la app genera respaldos que puedes restaurar desde `Herramientas`.
 
 ## Preparar playlist
 
@@ -54,13 +69,16 @@ Si falta metadata de artista o titulo, la app intenta inferirla desde nombres ex
 
 - Dos bibliotecas lado a lado: principal y entrante.
 - Busqueda por nombre o metadata y filtros por campos faltantes, canciones sin portada y duplicadas.
+- Filtros y orden por calidad de audio: 128 kbps o menos, 256 kbps aprox. y 320 kbps o mas.
 - Lista organizada con seleccion multiple y orden manual.
 - Reordenar canciones con drag and drop y numerar pistas segun el orden actual.
 - Preparar playlist con preview: orden actual, `track_number` y renombrado fisico a `001 - Artista - Titulo`.
 - Insertar canciones en una posicion concreta y recorrer automaticamente las demas.
-- Ordenar por nombre, artista, album, numero de pista, duracion o fecha.
+- Ordenar por nombre, artista, album, numero de pista, duracion, calidad, fecha o ultima reproduccion.
 - Vista previa compacta con portada, titulo, artista, artista album, album, ano, genero, pista y comentario.
 - Edicion individual y edicion por lotes con previsualizacion antes/despues.
+- Importar metadata desde JSON con preview y seleccion de campos.
+- Exportar seleccionadas, vista actual JSON, playlist M3U8 y reporte completo de biblioteca.
 - Acciones rapidas de limpieza:
   - Quitar `feat`, `ft` y `featuring`.
   - Quitar texto entre parentesis o corchetes.
@@ -75,9 +93,51 @@ Si falta metadata de artista o titulo, la app intenta inferirla desde nombres ex
 - Eliminar metadata con modal para elegir que campos conservar.
 - Gestion de caratulas: arrastra una imagen JPG o PNG sobre la portada para guardarla como `PORTADA.jpg` y aplicarla a la carpeta de la cancion activa.
 - Mover canciones entre carpetas, agregar canciones, renombrar y eliminar con envio seguro a papelera cuando esta disponible.
-- Reproductor integrado con play/pausa, detener, anterior, siguiente, repetir, aleatorio, salto de 10s, volumen, barra de progreso, tiempo y visualizador.
-- Temas claro/oscuro e idioma Espanol/Ingles.
+- Reproductor integrado redisenado con tarjeta premium, portada circular tipo vinilo, play/pausa centrado, anterior, siguiente, controles secundarios, progreso minimalista y modal de volumen.
+- Temas claro/oscuro, presets visuales, temas personalizados, pantalla completa, tamanos de fuente y densidad.
+- Menus y modales principales adaptados al tema activo, incluyendo `Acerca de`, guia rapida, atajos, diagnostico y reportes informativos.
+- Idioma Espanol/Ingles, deteccion de idioma del sistema y reporte de traducciones faltantes.
 - Logs en `mokamusic.log`.
+
+## Herramientas De Audio Y Biblioteca
+
+Desde `Herramientas` puedes revisar y corregir bibliotecas grandes:
+
+- Reporte de calidad con metadata faltante, duplicados, bitrate bajo y posibles archivos danados.
+- Estadisticas de biblioteca: duracion total, completitud, generos, anos, artistas y albumes principales.
+- Comparacion entre biblioteca principal y entrante para detectar canciones nuevas o duplicadas.
+- Historial de reproduccion con canciones escuchadas, conteos y ultima reproduccion.
+- Analisis de calidad de audio con bitrate, duracion, formato, frecuencia y canales.
+- Duplicados avanzados por metadata, nombre normalizado y duracion aproximada.
+- Validacion de archivos para detectar rutas rotas, extensiones no soportadas y archivos posiblemente corruptos.
+- Conversion de audio con presets MP3 320/256/128 kbps, WAV y FLAC, con opcion de conservar estructura de carpetas.
+
+## Organizacion Y Playlists Inteligentes
+
+MokaMusic tambien puede ordenar archivos fisicamente, siempre con preview antes de aplicar:
+
+- Renombrar archivos por plantilla, por ejemplo `{track_number:03d} - {artist} - {title}`.
+- Organizar archivos en carpetas con plantillas como `{artist}/{album}/{track_number:02d} - {title}`.
+- Validar playlists para detectar canciones repetidas, numeracion faltante y rutas rotas.
+- Generar playlists inteligentes con criterios:
+  - `low_bitrate`
+  - `unplayed`
+  - `missing_cover`
+  - `artist:Nombre`
+  - `genre:Genero`
+  - `duration:60`
+
+## Personalizacion
+
+El menu `Tema` permite ajustar MokaMusic al gusto del usuario:
+
+- Temas base claro, oscuro y sistema.
+- Presets visuales como clasico, azul nocturno, bosque, rose, alto contraste y OLED black.
+- Guardar tema actual como tema personalizado.
+- Administrar temas propios: renombrar, duplicar, eliminar y restaurar.
+- Importar y exportar temas en JSON.
+- Ajustar color de acento, tamano de fuente y densidad.
+- Pantalla completa con `F11`.
 
 ## Respaldos
 

@@ -2,10 +2,11 @@
 
 from pathlib import Path
 import re
+import os
 import tkinter as tk
 from tkinter import messagebox, simpledialog
 
-from ..constants import APP_NAME, UISettings
+from ..constants import APP_NAME, COPYRIGHT, LOG_FILE, UISettings, VERSION
 from ..controllers.config_controller import AppConfig, ConfigController
 from ..controllers.cover_controller import CoverController
 from ..controllers.drop_controller import DropController
@@ -21,11 +22,20 @@ from ..controllers.ui_text_controller import UiTextController
 from ..i18n import normalize_language
 from ..models import FilterMode, SortMode
 from ..services.custom_theme_service import export_custom_theme, import_custom_theme, public_theme_payload
+from ..services.backup_service import BACKUP_DIR
+from ..services.help_diagnostics_service import (
+    detect_system_language,
+    diagnostic_lines,
+    format_missing_translation_report,
+    missing_translation_report,
+)
 from ..services.library_compare_service import compare_libraries
 from ..services.playback_history_service import last_played_map, playback_history_summary, played_paths
 from ..ui_helpers.feedback import ProgressDialog, show_toast
 from ..views.modals.library_compare_modal import show_library_compare_modal
 from ..views.modals.library_stats_modal import show_library_stats_modal
+from ..views.modals.about_modal import show_about_modal
+from ..views.modals.info_modal import show_info_modal
 from ..views.modals.custom_theme_manager_modal import manage_custom_themes
 from ..views.modals.playback_history_modal import show_playback_history_modal
 from ..views.modals.theme_settings_modal import request_theme_selection
@@ -93,18 +103,34 @@ class AppLifecycleMixin:
             find_missing_covers=self._find_missing_covers,
             normalize_metadata=self._normalize_metadata_tool,
             search_replace_metadata=self._search_replace_metadata_tool,
+            analyze_audio_quality=self._analyze_audio_quality,
+            detect_advanced_duplicates=self._detect_advanced_duplicates,
+            validate_audio_files=self._validate_audio_files,
             convert_audio=self._convert_selected_audio,
+            rename_files_by_template=self._rename_files_by_template,
+            organize_files_by_folders=self._organize_files_by_folders,
+            validate_playlist=self._validate_playlist_tool,
+            generate_smart_playlist=self._generate_smart_playlist,
             show_backup_history=self._show_backup_history,
             undo_last_metadata_change=self._undo_last_metadata_change,
             undo=self._undo_last_action,
             redo=self._redo_last_action,
             change_language=self._change_language,
+            get_current_language=lambda: self.current_language,
+            detect_system_language=self._detect_system_language,
+            report_missing_translations=self._report_missing_translations,
+            show_quick_guide=self._show_quick_guide,
+            show_shortcuts=self._show_shortcuts,
+            view_logs=self._view_logs,
+            open_backup_folder=self._open_backup_folder,
+            show_system_diagnostics=self._show_system_diagnostics,
             show_about=self._show_about,
         )
         if self.menu_controller is None:
-            self.menu_controller = MenuController(self.root, self.t, callbacks)
+            self.menu_controller = MenuController(self.root, self.t, callbacks, self.style_manager.get_theme_colors())
         else:
             self.menu_controller.set_translator(self.t)
+            self.menu_controller.set_theme_colors(self.style_manager.get_theme_colors())
             self.menu_controller.callbacks = callbacks
         return self.menu_controller
 
@@ -262,17 +288,67 @@ class AppLifecycleMixin:
         return self.config_controller
 
     def _show_about(self) -> None:
-        messagebox.showinfo(
-            self.t("dialog.about_title"),
-            f"{APP_NAME}\n\n{self.t('about.body')}",
+        show_about_modal(
+            self.root,
+            self.t,
+            app_name=APP_NAME,
+            version=VERSION,
+            copyright_text=COPYRIGHT,
+            theme_colors=self.style_manager.get_theme_colors(),
         )
+
+    def _detect_system_language(self) -> None:
+        language = detect_system_language()
+        self._change_language(language)
+        self._save_config()
+        self._show_info_dialog(
+            self.t("dialog.done"),
+            self.t("language.detected", language=self.t(f"menu.language_{language}")),
+        )
+
+    def _report_missing_translations(self) -> None:
+        report = missing_translation_report()
+        self._show_info_dialog(
+            self.t("language.missing_title"),
+            self.t("language.missing_summary") + "\n\n" + format_missing_translation_report(report),
+        )
+
+    def _show_quick_guide(self) -> None:
+        self._show_info_dialog(self.t("help.quick_guide_title"), self.t("help.quick_guide_body"))
+
+    def _show_shortcuts(self) -> None:
+        self._show_info_dialog(self.t("help.shortcuts_title"), self.t("help.shortcuts_body"))
+
+    def _view_logs(self) -> None:
+        self._open_path_or_show(Path(LOG_FILE), self.t("help.logs_missing"))
+
+    def _open_backup_folder(self) -> None:
+        BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        self._open_path_or_show(BACKUP_DIR, self.t("help.backup_folder_missing"))
+
+    def _show_system_diagnostics(self) -> None:
+        lines = diagnostic_lines(
+            log_file=LOG_FILE,
+            main_folder=self.controller_principal.carpeta,
+            incoming_folder=self.controller_nueva.carpeta,
+        )
+        self._show_info_dialog(self.t("help.diagnostics_title"), lines)
+
+    def _open_path_or_show(self, path: Path, missing_message: str) -> None:
+        if not path.exists():
+            messagebox.showwarning(self.t("dialog.no_files"), missing_message)
+            return
+        try:
+            os.startfile(str(path.resolve()))
+        except Exception as exc:
+            messagebox.showerror(self.t("dialog.error"), self.t("help.open_failed", error=exc))
 
     def _show_first_run_welcome(self) -> None:
         if self.onboarding_seen:
             return
         self.onboarding_seen = True
         self._save_config()
-        messagebox.showinfo(
+        self._show_info_dialog(
             self.t("onboarding.title"),
             self.t("onboarding.body"),
         )
@@ -325,10 +401,18 @@ class AppLifecycleMixin:
             sections.append("\n".join(lines))
 
         if not sections:
-            messagebox.showinfo(self.t("quality.title"), self.t("quality.empty"))
+            self._show_info_dialog(self.t("quality.title"), self.t("quality.empty"))
             return
 
-        messagebox.showinfo(self.t("quality.title"), "\n\n".join(sections))
+        self._show_info_dialog(self.t("quality.title"), "\n\n".join(sections))
+
+    def _show_info_dialog(self, title: str, body) -> None:
+        show_info_modal(
+            self.root,
+            title=title,
+            body=body,
+            theme_colors=self.style_manager.get_theme_colors(),
+        )
 
     def _show_library_stats(self) -> None:
         target = self._active_playlist_target()
@@ -551,6 +635,11 @@ class AppLifecycleMixin:
             self.style_manager.set_theme(theme)
             for panel in self._library_panels:
                 self._apply_tree_colors(panel["tree"])
+            if self.menu_controller is not None:
+                self.menu_controller.set_theme_colors(self.style_manager.get_theme_colors())
+                self.menu_controller.install()
+            if hasattr(self, "player"):
+                self.player.refresh_theme()
         except Exception as exc:
             self.logger.error("Error changing theme to %s: %s", theme, exc)
 
@@ -572,6 +661,11 @@ class AppLifecycleMixin:
                 except Exception:
                     pass
                 self._apply_tree_colors(tree)
+            if self.menu_controller is not None:
+                self.menu_controller.set_theme_colors(self.style_manager.get_theme_colors())
+                self.menu_controller.install()
+            if hasattr(self, "player"):
+                self.player.refresh_theme()
         except Exception as exc:
             self.logger.error("Error changing appearance options: %s", exc)
 

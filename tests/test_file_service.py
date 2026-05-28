@@ -46,9 +46,11 @@ class FileServiceTests(unittest.TestCase):
             folder = Path(temp_dir)
             (folder / "b.wav").write_bytes(b"fake")
             (folder / "a.mp3").write_bytes(b"fake")
+            (folder / "Artist").mkdir()
+            (folder / "Artist" / "c.flac").write_bytes(b"fake")
             (folder / "cover.jpg").write_bytes(b"fake")
 
-            self.assertEqual(list_audio_files(folder), ["a.mp3", "b.wav"])
+            self.assertEqual(list_audio_files(folder), ["a.mp3", "Artist/c.flac", "b.wav"])
 
     def test_add_song_to_library_copies_file_and_registers_it(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -140,7 +140,11 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         self.preview.on_edit_metadata_requested = self._show_edit_metadata_modal
         self._register_cover_drop_target()
 
-        self.player = PlayerControls(bottom_panel, translator=self.t)
+        self.player = PlayerControls(
+            bottom_panel,
+            translator=self.t,
+            theme_colors=self.style_manager.get_theme_colors,
+        )
         self.player.on_track_end = self._play_next_track
         self.player.on_next_requested = lambda: self._play_relative_track(1)
         self.player.on_prev_requested = lambda: self._play_relative_track(-1)

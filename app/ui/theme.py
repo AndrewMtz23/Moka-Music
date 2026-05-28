@@ -229,6 +229,8 @@ class StyleManager:
 
         self.root.option_add("*Font", self.base_font)
         self.root.option_add("*Menu.Font", self.small_font)
+        self.root.option_add("*Menu.borderWidth", 0)
+        self.root.option_add("*Menu.relief", "flat")
 
     def _create_theme_styles(self) -> None:
         self.light_palette = dict(THEME_PRESETS["light"])
@@ -529,6 +531,12 @@ class StyleManager:
 
     def _apply_theme_colors(self) -> None:
         self.root.configure(bg=self._get_color("background"))
+        self.root.option_add("*Menu.background", self._get_color("surface"))
+        self.root.option_add("*Menu.foreground", self._get_color("text"))
+        self.root.option_add("*Menu.activeBackground", self._get_color("primary"))
+        self.root.option_add("*Menu.activeForeground", self._get_color("button_text"))
+        self.root.option_add("*Menu.disabledForeground", self._get_color("disabled"))
+        self.root.option_add("*Menu.selectColor", self._get_color("primary"))
         self._create_common_styles()
 
     def adjust_for_dpi(self) -> None:

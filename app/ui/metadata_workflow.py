@@ -8,6 +8,7 @@ from ..controllers.backup_controller import BackupController
 from ..controllers.cleanup_controller import CleanupController
 from ..controllers.cleanup_preset_controller import CleanupPresetController
 from ..models import SortMode
+from ..services.audio_audit_service import build_audio_quality_rows, detect_advanced_duplicates, validate_audio_files
 from ..services.audio_conversion_service import build_conversion_items, convert_audio_files
 from ..utils.ui_formatting import metadata_label_key
 from ..services.metadata_import_service import filter_import_items_for_library, load_metadata_import_items
@@ -17,12 +18,23 @@ from ..services.metadata_tools_service import (
     tool_plan_groups,
     tool_plan_preview,
 )
+from ..services.file_organization_service import (
+    DEFAULT_ORGANIZE_TEMPLATE,
+    DEFAULT_RENAME_TEMPLATE,
+    build_template_plan,
+    execute_file_plan,
+    smart_playlist_filenames,
+    validate_playlist,
+)
+from ..services.file_service import sanitize_filename
 from ..services.playlist_export_service import export_library_report, export_library_view_json, export_playlist
 from ..views.modals.backup_history_modal import show_backup_history_modal
 from ..views.modals.change_preview_modal import confirm_change_preview
 from ..views.modals.cleanup_preset_modal import show_cleanup_preset_modal
 from ..views.modals.clear_metadata_modal import KEEP_FIELDS_KEY
+from ..views.modals.audio_audit_modal import show_audio_audit_modal
 from ..views.modals.audio_conversion_modal import request_audio_conversion_options
+from ..views.modals.file_plan_preview_modal import confirm_file_plan_preview, show_playlist_validation_modal
 from ..views.modals.online_metadata_modal import request_online_metadata_selection
 from ..views.modals.metadata_import_preview_modal import confirm_metadata_import
 from ..views.modals.playlist_insert_preview_modal import request_playlist_insert_preview
@@ -460,23 +472,246 @@ class MetadataWorkflowMixin:
             ]
         )
 
+    def _audio_tool_targets(self) -> list[tuple[MetadataController, object, list[str]]]:
+        selections = self._selected_filenames_by_controller()
+        if selections:
+            return selections
+        target = self._active_playlist_target()
+        if target is None:
+            return []
+        controller, tree = target
+        return [(controller, tree, controller.archivos.copy())]
+
+    def _analyze_audio_quality(self) -> None:
+        groups = self._audio_tool_targets()
+        if not groups:
+            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
+            return
+        rows = build_audio_quality_rows(groups)
+        show_audio_audit_modal(
+            self.root,
+            self.t,
+            self.t("audio_tools.quality_title"),
+            rows,
+            [
+                ("filename", self.t("audio_tools.filename"), 260),
+                ("title", self.t("audio_tools.title"), 180),
+                ("artist", self.t("audio_tools.artist"), 160),
+                ("duration", self.t("audio_tools.duration"), 80),
+                ("bitrate_kbps", self.t("audio_tools.bitrate"), 90),
+                ("sample_rate", self.t("audio_tools.sample_rate"), 90),
+                ("channels", self.t("audio_tools.channels"), 80),
+                ("format", self.t("audio_tools.format"), 80),
+                ("low_bitrate", self.t("audio_tools.low_bitrate"), 90),
+                ("possibly_corrupt", self.t("audio_tools.corrupt"), 90),
+            ],
+        )
+
+    def _detect_advanced_duplicates(self) -> None:
+        groups = self._audio_tool_targets()
+        if not groups:
+            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
+            return
+        rows = detect_advanced_duplicates(groups)
+        if not rows:
+            messagebox.showinfo(self.t("audio_tools.duplicates_title"), self.t("audio_tools.no_duplicates"))
+            return
+        show_audio_audit_modal(
+            self.root,
+            self.t,
+            self.t("audio_tools.duplicates_title"),
+            rows,
+            [
+                ("filename", self.t("audio_tools.filename"), 360),
+                ("title", self.t("audio_tools.title"), 180),
+                ("artist", self.t("audio_tools.artist"), 160),
+                ("duration", self.t("audio_tools.duration"), 130),
+                ("issue", self.t("audio_tools.issue"), 180),
+            ],
+        )
+
+    def _validate_audio_files(self) -> None:
+        groups = self._audio_tool_targets()
+        if not groups:
+            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
+            return
+        rows = validate_audio_files(groups)
+        if not rows:
+            messagebox.showinfo(self.t("audio_tools.validation_title"), self.t("audio_tools.no_validation_issues"))
+            return
+        show_audio_audit_modal(
+            self.root,
+            self.t,
+            self.t("audio_tools.validation_title"),
+            rows,
+            [
+                ("filename", self.t("audio_tools.filename"), 260),
+                ("path", self.t("audio_tools.path"), 360),
+                ("format", self.t("audio_tools.format"), 100),
+                ("issues", self.t("audio_tools.issues"), 220),
+            ],
+        )
+
+    def _rename_files_by_template(self) -> None:
+        target = self._active_playlist_target()
+        if target is None:
+            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
+            return
+        controller, tree = target
+        filenames = self._selected_or_active_filenames(controller)
+        template = simpledialog.askstring(
+            self.t("file_organization.rename_title"),
+            self.t("file_organization.template_prompt", default=DEFAULT_RENAME_TEMPLATE),
+            initialvalue=DEFAULT_RENAME_TEMPLATE,
+            parent=self.root,
+        )
+        if not template:
+            return
+        self._apply_file_plan(controller, tree, build_template_plan(controller, filenames, template), self.t("file_organization.rename_title"))
+
+    def _organize_files_by_folders(self) -> None:
+        target = self._active_playlist_target()
+        if target is None:
+            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
+            return
+        controller, tree = target
+        filenames = self._selected_or_active_filenames(controller)
+        template = simpledialog.askstring(
+            self.t("file_organization.organize_title"),
+            self.t("file_organization.template_prompt", default=DEFAULT_ORGANIZE_TEMPLATE),
+            initialvalue=DEFAULT_ORGANIZE_TEMPLATE,
+            parent=self.root,
+        )
+        if not template:
+            return
+        self._apply_file_plan(controller, tree, build_template_plan(controller, filenames, template), self.t("file_organization.organize_title"))
+
+    def _apply_file_plan(self, controller, tree, plan, title: str) -> None:
+        if not plan:
+            messagebox.showinfo(self.t("dialog.done"), self.t("file_organization.no_changes"))
+            return
+        rows = [(item.old_name, item.new_name) for item in plan]
+        if not confirm_file_plan_preview(self.root, self.t, title, rows):
+            return
+        result = execute_file_plan(controller, plan, song_info=self.song_info)
+        self._refresh_library_tree(controller, tree)
+        if self._preview_controller is controller and self._preview_filename:
+            mapped = {item.old_name: item.new_name for item in plan}
+            self._preview_filename = mapped.get(self._preview_filename, self._preview_filename)
+            if self._preview_filename in controller.archivos:
+                self._load_song_preview(controller, self._preview_filename)
+        if result.errors:
+            detail = self.t("file_organization.done_with_errors", count=result.moved, errors=len(result.errors))
+            detail += "\n\n" + "\n".join(result.errors[:5])
+            messagebox.showwarning(title, detail)
+            self._show_toast(self.t("toast.partial"), kind="warning")
+            return
+        message = self.t("file_organization.done", count=result.moved)
+        if result.backup_path:
+            message += f"\n{self.t('message.backup_created', path=result.backup_path)}"
+            self._record_undo_paths("undo.files", [result.backup_path])
+        self._show_toast(message, kind="success")
+        messagebox.showinfo(self.t("dialog.done"), message)
+
+    def _validate_playlist_tool(self) -> None:
+        target = self._active_playlist_target()
+        if target is None:
+            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
+            return
+        controller, _tree = target
+        rows = validate_playlist(controller, controller.archivos.copy())
+        if not rows:
+            messagebox.showinfo(self.t("playlist_validation.title"), self.t("playlist_validation.ok"))
+            return
+        show_playlist_validation_modal(self.root, self.t, rows)
+
+    def _generate_smart_playlist(self) -> None:
+        target = self._active_playlist_target()
+        if target is None:
+            messagebox.showwarning(self.t("dialog.no_files"), self.t("playlist_export.no_library"))
+            return
+        controller, _tree = target
+        mode = simpledialog.askstring(
+            self.t("smart_playlist.title"),
+            self.t("smart_playlist.prompt"),
+            initialvalue="low_bitrate",
+            parent=self.root,
+        )
+        mode = str(mode or "").strip()
+        if not mode:
+            return
+        try:
+            filenames = smart_playlist_filenames(controller, mode)
+        except Exception as exc:
+            messagebox.showerror(self.t("dialog.error"), self.t("smart_playlist.failed", error=exc))
+            return
+        if not filenames:
+            messagebox.showinfo(self.t("smart_playlist.title"), self.t("smart_playlist.empty"))
+            return
+        output_path = self.file_handler.seleccionar_destino_playlist(
+            initial_name=f"{sanitize_filename(mode)}.m3u8",
+        )
+        if not output_path:
+            return
+        metadata_by_filename, _quality_by_filename, duration_by_filename = self._export_metadata_maps(controller, filenames)
+        for filename, duration in duration_by_filename.items():
+            metadata_by_filename.setdefault(filename, {})["duration"] = str(duration)
+        try:
+            path = export_playlist(
+                folder=controller.carpeta,
+                filenames=filenames,
+                output_path=output_path,
+                metadata_by_filename=metadata_by_filename,
+            )
+        except Exception as exc:
+            messagebox.showerror(self.t("dialog.error"), self.t("smart_playlist.failed", error=exc))
+            return
+        self._show_toast(self.t("smart_playlist.done", count=len(filenames), path=path), kind="success")
+        messagebox.showinfo(self.t("dialog.done"), self.t("smart_playlist.done", count=len(filenames), path=path))
+
+    def _selected_or_active_filenames(self, controller) -> list[str]:
+        selections = [
+            filenames
+            for selected_controller, _tree, filenames in self._selected_filenames_by_controller()
+            if selected_controller is controller
+        ]
+        if selections:
+            return [filename for group in selections for filename in group]
+        return controller.archivos.copy()
+
     def _convert_selected_audio(self) -> None:
         selections = self._selected_filenames_by_controller()
         if not selections:
             messagebox.showwarning(self.t("dialog.selection"), self.t("audio_conversion.no_selection"))
             return
-        sources: list[str] = []
+        source_groups: list[tuple[object, list[str]]] = []
         for controller, _tree, filenames in selections:
-            sources.extend(str(Path(controller.carpeta) / filename) for filename in filenames)
+            source_groups.append((controller, [str(Path(controller.carpeta) / filename) for filename in filenames]))
+        sources = [source for _controller, group_sources in source_groups for source in group_sources]
         options = request_audio_conversion_options(self.root, self.t, len(sources))
         if not options:
             return
         try:
-            items = build_conversion_items(
-                sources,
-                str(options["destination"]),
-                str(options["format"]),
-            )
+            if bool(options.get("preserve_structure")):
+                items = []
+                for controller, group_sources in source_groups:
+                    items.extend(
+                        build_conversion_items(
+                            group_sources,
+                            str(options["destination"]),
+                            str(options["format"]),
+                            bitrate=options.get("bitrate"),
+                            preserve_structure=True,
+                            source_root=controller.carpeta,
+                        )
+                    )
+            else:
+                items = build_conversion_items(
+                    sources,
+                    str(options["destination"]),
+                    str(options["format"]),
+                    bitrate=options.get("bitrate"),
+                )
         except Exception as exc:
             messagebox.showerror(self.t("dialog.error"), self.t("audio_conversion.failed", error=exc))
             return

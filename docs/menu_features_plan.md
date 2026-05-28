@@ -161,6 +161,8 @@ Objetivo: acelerar limpieza y correccion de bibliotecas grandes.
 
 ## Fase 5: Herramientas De Audio Y Calidad
 
+Estado: completada el 2026-05-27.
+
 Objetivo: convertir el menu Herramientas en un panel serio de auditoria de audio.
 
 ### Herramientas > Audio
@@ -170,14 +172,17 @@ Objetivo: convertir el menu Herramientas en un panel serio de auditoria de audio
   - Duracion.
   - Formato.
   - Posibles corruptos.
+  - Estado: completado el 2026-05-27.
 - `Detectar duplicados avanzado`
   - Por metadata.
   - Por duracion aproximada.
   - Por nombre normalizado.
+  - Estado: completado el 2026-05-27.
 - `Validar archivos`
   - Rutas rotas.
   - Archivos no reproducibles.
   - Extensiones no soportadas.
+  - Estado: completado el 2026-05-27.
 - Mejorar `Convertir audio...`
   - Presets:
     - MP3 320 kbps
@@ -186,6 +191,7 @@ Objetivo: convertir el menu Herramientas en un panel serio de auditoria de audio
     - WAV
     - FLAC si ffmpeg lo soporta
   - Opcion de conservar estructura de carpetas.
+  - Estado: completado el 2026-05-27.
 
 ### Criterio De Salida
 
@@ -194,6 +200,8 @@ Objetivo: convertir el menu Herramientas en un panel serio de auditoria de audio
 - Conversion mantiene confirmaciones claras para no sobrescribir sin permiso.
 
 ## Fase 6: Organizacion De Archivos Y Playlist
+
+Estado: completada el 2026-05-27.
 
 Objetivo: ayudar a dejar la biblioteca ordenada fisicamente, no solo dentro de la app.
 
@@ -206,20 +214,24 @@ Objetivo: ayudar a dejar la biblioteca ordenada fisicamente, no solo dentro de l
 {track_number:03d} - {artist} - {title}
 {artist}/{album}/{track_number:02d} - {title}
 ```
+  - Estado: completado el 2026-05-27.
 
 - `Organizar archivos en carpetas...`
   - Por artista.
   - Por album.
   - Por ano.
+  - Estado: completado el 2026-05-27.
 - `Validar playlist`
   - Canciones repetidas.
   - Numeracion faltante.
   - Rutas rotas.
+  - Estado: completado el 2026-05-27.
 - `Generar playlist inteligente`
   - Por calidad.
   - Por canciones no reproducidas.
   - Por artista/genero.
   - Por duracion objetivo.
+  - Estado: completado el 2026-05-27 con criterios: low_bitrate, unplayed, missing_cover, artist:Nombre, genre:Genero y duration:60.
 
 ### Criterio De Salida
 
@@ -229,6 +241,8 @@ Objetivo: ayudar a dejar la biblioteca ordenada fisicamente, no solo dentro de l
 
 ## Fase 7: Idioma Y Ayuda
 
+Estado: completada el 2026-05-27.
+
 Objetivo: que el usuario entienda mejor la app y que el proyecto sea mas facil de mantener.
 
 ### Idioma
@@ -237,6 +251,7 @@ Objetivo: que el usuario entienda mejor la app y que el proyecto sea mas facil d
 - `Detectar idioma del sistema`.
 - `Reportar textos sin traducir`.
 - Preparar soporte para traducciones externas si el proyecto crece.
+  - Estado: completado el 2026-05-27.
 
 ### Ayuda
 
@@ -246,6 +261,7 @@ Objetivo: que el usuario entienda mejor la app y que el proyecto sea mas facil d
   - Filtrar por calidad.
   - Exportar listas.
   - Preparar playlist.
+  - Estado: completado el 2026-05-27.
 - `Atajos de teclado`.
 - `Ver logs`.
 - `Abrir carpeta de respaldos`.
@@ -254,11 +270,74 @@ Objetivo: que el usuario entienda mejor la app y que el proyecto sea mas facil d
   - Verificar permisos.
   - Verificar dependencias opcionales.
 - `Acerca de MokaMusic`.
+  - Estado: completado el 2026-05-27.
 
 ### Criterio De Salida
 
 - El menu Ayuda sirve tanto a usuarios como a desarrollo.
 - El diagnostico reduce dudas cuando algo falla.
+
+## Fase 8: Reproductor Premium
+
+Estado: completada el 2026-05-27.
+
+Objetivo: transformar el reproductor en una tarjeta mas clara, limpia y moderna sin romper la logica de playback existente.
+
+### Reproductor
+
+- Reducir acciones visibles a:
+  - Anterior.
+  - Play/Pausa.
+  - Siguiente.
+- Mover acciones secundarias a un menu discreto:
+  - Aleatorio.
+  - Repetir.
+  - Bajar volumen.
+  - Subir volumen.
+  - Retroceder 10 segundos.
+  - Adelantar 10 segundos.
+  - Detener.
+- Redisenar la superficie visual:
+  - Tarjeta clara con esquinas redondeadas.
+  - Portada circular tipo vinilo sobresaliendo por la izquierda.
+  - Titulo prominente y artista secundario.
+  - Barra de progreso delgada con acento azul.
+  - Sin contador duplicado.
+- Mantener compatibilidad con:
+  - Atajos y seleccion de pista.
+  - Configuracion persistente de volumen.
+  - Repeat/shuffle existentes.
+
+### Criterio De Salida
+
+- El reproductor se ve menos saturado.
+- Las acciones principales son inmediatas.
+- Las acciones secundarias siguen disponibles sin ocupar espacio.
+- Las pruebas automatizadas siguen pasando.
+
+## Fase 9: Playlist Inteligente Avanzada
+
+Estado: completada el 2026-05-27.
+
+Objetivo: cerrar la generacion de playlists inteligentes para que sirva como herramienta real de curacion rapida, no solo como exportador de casos fijos.
+
+### Organizacion
+
+- Ampliar `Generar playlist inteligente...` con criterios escritos:
+  - `low_bitrate`: canciones con bitrate bajo.
+  - `unplayed`: canciones no reproducidas.
+  - `missing_cover`: canciones sin portada.
+  - `artist:Nombre`: canciones cuyo artista coincida parcialmente.
+  - `genre:Genero`: canciones cuyo genero coincida parcialmente.
+  - `duration:60`: canciones agregadas en orden hasta llegar a la duracion objetivo en minutos.
+- Sanitizar el nombre sugerido del archivo exportado para evitar caracteres invalidos en Windows.
+- Mostrar error claro si el criterio de duracion no es valido.
+
+### Criterio De Salida
+
+- El usuario puede crear playlists por calidad, historial, portada, artista, genero o duracion.
+- Los criterios nuevos tienen pruebas unitarias.
+- La fase 6 queda cerrada sin pendientes parciales en playlist inteligente.
 
 ## Orden Recomendado De Implementacion
 
