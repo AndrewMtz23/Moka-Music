@@ -1,12 +1,12 @@
 # MokaMusic
 
-MokaMusic es una app de escritorio para revisar, reproducir, limpiar y editar metadatos de canciones locales. Esta pensada para preparar musica antes de moverla a playlists: puedes trabajar con dos carpetas, corregir datos en lote, reordenar canciones, renombrar archivos y conservar respaldos antes de cambios importantes.
+MokaMusic is a desktop app for reviewing, playing, cleaning, organizing, and editing metadata for local music files. It is designed for playlist preparation: you can work with two folders side by side, fix metadata in batches, reorder tracks, rename files, export reports, and keep backups before important changes.
 
-## Estado actual
+## Current Status
 
-El proyecto usa un entorno virtual local creado por ti. La carpeta `venv/` anterior ya no es necesaria; usa `.venv/` con el Python instalado en tu maquina.
+The project uses a local virtual environment. The old `venv/` folder is no longer needed; use `.venv/` with the Python version installed on your machine.
 
-## Instalacion
+## Installation
 
 ```powershell
 python -m venv .venv
@@ -15,175 +15,179 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Si `python` no existe en tu PATH, instala Python 3.10+ y activa la opcion de agregarlo al PATH.
+If `python` is not available in your PATH, install Python 3.10+ and enable the option to add it to PATH.
 
-## Ejecutar
+## Run From Source
 
 ```powershell
 python main.py
 ```
 
-## Ejecutable Windows
+## Windows Executable
 
-El proyecto incluye una configuracion de PyInstaller para generar una version ejecutable de escritorio.
+The project includes a PyInstaller configuration for building a desktop executable.
 
 ```powershell
 .\.venv\Scripts\pyinstaller.exe MokaMusic.spec --noconfirm
 ```
 
-El resultado queda en:
+The generated app is placed at:
 
 ```text
 dist/MokaMusic/MokaMusic.exe
 ```
 
-## Flujo principal
+Because the current build uses PyInstaller's folder mode, distribute the whole `dist/MokaMusic` folder, not only the `.exe`.
 
-1. Abre una carpeta en `Biblioteca principal` y, si hace falta, otra en `Biblioteca entrante`.
-2. Selecciona una o varias canciones para previsualizar portada y metadatos.
-3. Usa `Editar metadata...` para modificar una cancion o aplicar campos seleccionados a varias.
-4. En `Biblioteca entrante`, usa `Metadatos globales` para preparar musica nueva antes de moverla a la playlist principal.
-5. Usa `Preparar playlist` para numerar pistas y renombrar archivos con el formato `001 - Artista - Titulo`.
-6. Revisa calidad, duplicados, portadas faltantes y metadata desde los reportes de `Herramientas`.
-7. Reproduce la seleccion con el reproductor inferior redisenado, con portada tipo vinilo, progreso, volumen y controles principales.
-8. Antes de cambios masivos, la app genera respaldos que puedes restaurar desde `Herramientas`.
+## Main Workflow
 
-## Preparar playlist
+1. Open a folder in `Main Library` and, if needed, another one in `Incoming Library`.
+2. Select one or more tracks to preview cover art and metadata.
+3. Use `Edit metadata...` to edit a single song or selected fields across multiple songs.
+4. In `Incoming Library`, use global metadata tools to prepare new music before moving it into the main playlist.
+5. Use `Prepare playlist` to number tracks and rename files using a format like `001 - Artist - Title`.
+6. Review quality, duplicates, missing cover art, and metadata issues from the `Tools` menu.
+7. Play the current selection with the redesigned bottom player, including vinyl-style cover art, progress, volume, and primary controls.
+8. Before bulk changes, MokaMusic creates backups that can be restored from `Tools`.
 
-El flujo de playlist esta pensado para evitar renumerar y renombrar a mano:
+## Prepare Playlist
 
-1. Carga tu playlist curada en `Biblioteca principal` o canciones nuevas en `Biblioteca entrante`.
-2. Acomoda el orden visual de las canciones.
-3. Usa `Insertar en posicion...` si quieres mover una o varias canciones a una posicion concreta.
-4. Usa `Preparar playlist` para aplicar el orden completo.
+The playlist workflow is built to avoid manual renumbering and renaming:
 
-`Preparar playlist` hace todo junto: crea respaldo, actualiza `track_number`, renombra archivos y refresca la biblioteca. El nombre final queda:
+1. Load a curated playlist into `Main Library`, or new songs into `Incoming Library`.
+2. Arrange the visible order of the tracks.
+3. Use `Insert at position...` if you want to move one or more songs into a specific position.
+4. Use `Prepare playlist` to apply the full order.
+
+`Prepare playlist` creates a backup, updates `track_number`, renames files, and refreshes the library. The final filename format is:
 
 ```text
-001 - Artista - Titulo.mp3
+001 - Artist - Title.mp3
 ```
 
-Si falta metadata de artista o titulo, la app intenta inferirla desde nombres existentes como `Artista - Titulo.mp3`.
+If artist or title metadata is missing, MokaMusic tries to infer it from existing filenames such as `Artist - Title.mp3`.
 
-## Funciones principales
+## Core Features
 
-- Dos bibliotecas lado a lado: principal y entrante.
-- Busqueda por nombre o metadata y filtros por campos faltantes, canciones sin portada y duplicadas.
-- Filtros y orden por calidad de audio: 128 kbps o menos, 256 kbps aprox. y 320 kbps o mas.
-- Lista organizada con seleccion multiple y orden manual.
-- Reordenar canciones con drag and drop y numerar pistas segun el orden actual.
-- Preparar playlist con preview: orden actual, `track_number` y renombrado fisico a `001 - Artista - Titulo`.
-- Insertar canciones en una posicion concreta y recorrer automaticamente las demas.
-- Ordenar por nombre, artista, album, numero de pista, duracion, calidad, fecha o ultima reproduccion.
-- Vista previa compacta con portada, titulo, artista, artista album, album, ano, genero, pista y comentario.
-- Edicion individual y edicion por lotes con previsualizacion antes/despues.
-- Importar metadata desde JSON con preview y seleccion de campos.
-- Exportar seleccionadas, vista actual JSON, playlist M3U8 y reporte completo de biblioteca.
-- Acciones rapidas de limpieza:
-  - Quitar `feat`, `ft` y `featuring`.
-  - Quitar texto entre parentesis o corchetes.
-  - Conservar solo titulo.
-  - Crear titulo desde nombre de archivo.
-  - Preparar playlist segun el orden visible.
-  - Insertar canciones en una posicion.
-  - Copiar artista a artista album.
-  - Renombrar archivos desde metadata.
-  - Buscar portada automaticamente desde la carpeta.
-- Presets personalizados para guardar varias acciones de limpieza y aplicarlas juntas.
-- Eliminar metadata con modal para elegir que campos conservar.
-- Gestion de caratulas: arrastra una imagen JPG o PNG sobre la portada para guardarla como `PORTADA.jpg` y aplicarla a la carpeta de la cancion activa.
-- Mover canciones entre carpetas, agregar canciones, renombrar y eliminar con envio seguro a papelera cuando esta disponible.
-- Reproductor integrado redisenado con tarjeta premium, portada circular tipo vinilo, play/pausa centrado, anterior, siguiente, controles secundarios, progreso minimalista y modal de volumen.
-- Temas claro/oscuro, presets visuales, temas personalizados, pantalla completa, tamanos de fuente y densidad.
-- Menus y modales principales adaptados al tema activo, incluyendo `Acerca de`, guia rapida, atajos, diagnostico y reportes informativos.
-- Idioma Espanol/Ingles, deteccion de idioma del sistema y reporte de traducciones faltantes.
-- Logs en `mokamusic.log`.
+- Two side-by-side libraries: main and incoming.
+- Search by filename or metadata, with filters for missing fields, missing cover art, duplicates, and playback status.
+- Audio quality filters and sorting for low bitrate, approximate 256 kbps, and 320 kbps or higher.
+- Organized track list with multiple selection and manual ordering.
+- Drag-and-drop reordering and track numbering based on the current order.
+- Playlist preparation with preview: current order, `track_number`, and physical file rename.
+- Insert tracks at a specific position and automatically shift the rest.
+- Sorting by name, artist, album, track number, duration, audio quality, date, or last played.
+- Compact preview panel with cover art, title, artist, album artist, album, year, genre, track number, and comments.
+- Single-track editing and batch editing with before/after preview.
+- JSON metadata import with preview and selectable fields.
+- Export selected tracks, current view JSON, M3U8 playlists, and full library reports.
+- Custom cleanup presets for grouping several metadata cleanup actions.
+- Metadata clearing modal with selectable fields to preserve.
+- Cover art management: drag a JPG or PNG into the preview to save it as `PORTADA.jpg` and apply it to the active song folder.
+- Safe moving, adding, renaming, and deleting with recycle-bin support when available.
+- Redesigned integrated player with a premium card layout, circular vinyl-style cover, centered play/pause, previous/next controls, secondary controls, minimal progress bar, and volume modal.
+- Light/dark themes, visual presets, custom themes, fullscreen mode, font size, and density settings.
+- Main menus and informational modals adapt to the active theme, including About, quick guide, shortcuts, diagnostics, and reports.
+- Spanish/English UI, system language detection, and missing translation reporting.
+- Logs in `mokamusic.log`.
 
-## Herramientas De Audio Y Biblioteca
+## Quick Cleanup Actions
 
-Desde `Herramientas` puedes revisar y corregir bibliotecas grandes:
+- Remove `feat`, `ft`, and `featuring`.
+- Remove text inside parentheses or brackets.
+- Keep only the title.
+- Create title from filename.
+- Prepare playlist from the visible order.
+- Insert songs at a specific position.
+- Copy artist to album artist.
+- Rename files from metadata.
+- Find cover art automatically from the folder.
 
-- Reporte de calidad con metadata faltante, duplicados, bitrate bajo y posibles archivos danados.
-- Estadisticas de biblioteca: duracion total, completitud, generos, anos, artistas y albumes principales.
-- Comparacion entre biblioteca principal y entrante para detectar canciones nuevas o duplicadas.
-- Historial de reproduccion con canciones escuchadas, conteos y ultima reproduccion.
-- Analisis de calidad de audio con bitrate, duracion, formato, frecuencia y canales.
-- Duplicados avanzados por metadata, nombre normalizado y duracion aproximada.
-- Validacion de archivos para detectar rutas rotas, extensiones no soportadas y archivos posiblemente corruptos.
-- Conversion de audio con presets MP3 320/256/128 kbps, WAV y FLAC, con opcion de conservar estructura de carpetas.
+## Audio And Library Tools
 
-## Organizacion Y Playlists Inteligentes
+From `Tools`, MokaMusic can inspect and repair larger libraries:
 
-MokaMusic tambien puede ordenar archivos fisicamente, siempre con preview antes de aplicar:
+- Quality report with missing metadata, duplicates, low bitrate, and possible file damage.
+- Library statistics: total duration, metadata completion, genres, years, top artists, and top albums.
+- Library comparison between main and incoming folders to detect new songs or duplicates.
+- Playback history with played songs, play counts, and last played date.
+- Audio quality analysis with bitrate, duration, format, sample rate, and channels.
+- Advanced duplicate detection by metadata, normalized filename, and approximate duration.
+- File validation for missing paths, unsupported extensions, and possibly corrupt files.
+- Audio conversion presets for MP3 320/256/128 kbps, WAV, and FLAC, with an option to preserve folder structure.
 
-- Renombrar archivos por plantilla, por ejemplo `{track_number:03d} - {artist} - {title}`.
-- Organizar archivos en carpetas con plantillas como `{artist}/{album}/{track_number:02d} - {title}`.
-- Validar playlists para detectar canciones repetidas, numeracion faltante y rutas rotas.
-- Generar playlists inteligentes con criterios:
+## Organization And Smart Playlists
+
+MokaMusic can also organize files physically, always with preview before applying changes:
+
+- Rename files by template, for example `{track_number:03d} - {artist} - {title}`.
+- Organize files into folders with templates like `{artist}/{album}/{track_number:02d} - {title}`.
+- Validate playlists to detect repeated songs, missing numbering, and broken paths.
+- Generate smart playlists with criteria:
   - `low_bitrate`
   - `unplayed`
   - `missing_cover`
-  - `artist:Nombre`
-  - `genre:Genero`
+  - `artist:Name`
+  - `genre:Genre`
   - `duration:60`
 
-## Personalizacion
+## Appearance
 
-El menu `Tema` permite ajustar MokaMusic al gusto del usuario:
+The `Theme` menu lets users personalize MokaMusic:
 
-- Temas base claro, oscuro y sistema.
-- Presets visuales como clasico, azul nocturno, bosque, rose, alto contraste y OLED black.
-- Guardar tema actual como tema personalizado.
-- Administrar temas propios: renombrar, duplicar, eliminar y restaurar.
-- Importar y exportar temas en JSON.
-- Ajustar color de acento, tamano de fuente y densidad.
-- Pantalla completa con `F11`.
+- Light, dark, and system theme modes.
+- Visual presets such as classic, midnight blue, forest, rose, high contrast, and OLED black.
+- Save the current appearance as a custom theme.
+- Manage custom themes: rename, duplicate, delete, and restore.
+- Import and export themes as JSON.
+- Adjust accent color, font size, and density.
+- Fullscreen mode with `F11`.
 
-## Respaldos
+## Backups
 
-La app crea respaldos JSON antes de cambios de metadata en lote, limpieza, renombrado o portada. Los respaldos incluyen metadata y caratula cuando esta disponible.
+MokaMusic creates JSON backups before batch metadata changes, cleanup operations, renaming, moving files, or cover art changes. Backups include metadata and cover art when available.
 
-Desde el menu `Herramientas` puedes usar:
+From the `Tools` menu you can use:
 
-- `Historial de respaldos`: ver fecha, accion, carpeta y cantidad de canciones afectadas.
-- `Deshacer ultimo cambio de metadata`: restaurar el respaldo mas reciente de la sesion.
+- `Backup history`: view date, action, folder, and number of affected songs.
+- `Undo last metadata change`: restore the most recent backup from the current session.
 
-## Pruebas
+## Tests
 
-Compilar modulos principales:
+Compile key modules:
 
 ```powershell
 .\.venv\Scripts\python.exe -m py_compile main.py app\ui\app.py app\ui\metadata_workflow.py app\ui\theme.py app\services\metadata_editor_service.py app\services\song_info_service.py app\services\playback\audio_player.py
 ```
 
-Ejecutar pruebas:
+Run the full test suite:
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -p "test*.py"
 ```
 
-## Dependencias
+## Dependencies
 
-`requirements.txt` es la fuente de verdad:
+`requirements.txt` is the source of truth:
 
-- `eyed3` y `mutagen` para leer/escribir metadata.
-- `Pillow` para portadas.
-- `pygame` para reproduccion.
-- `tkinterdnd2` para arrastrar y soltar.
-- `Send2Trash` para borrado seguro cuando esta disponible.
+- `eyed3` and `mutagen` for reading and writing metadata.
+- `Pillow` for cover art.
+- `pygame` for playback.
+- `tkinterdnd2` for drag and drop.
+- `Send2Trash` for safe deletion when available.
 
-## Arquitectura
+## Architecture
 
-El proyecto empezo con modulos planos dentro de `app/`. La app ahora usa una estructura por capas para que las siguientes mejoras sean mas faciles de mantener:
+The project started with flat modules under `app/`. It now uses a layered structure so future improvements are easier to maintain:
 
 ```text
 app/
-  controllers/      Coordinacion entre UI y servicios
-  models/           Datos, enums y resultados compartidos
-  services/         Logica de metadata, backups, portadas, archivos y playlists
-  ui/               App principal y workflows UI extraidos
-  views/            Paneles y ventanas Tkinter
-  views/modals/     Modales de edicion, preview, backups y presets
-  ui_helpers/       Widgets reutilizables y tooltips extraidos de vistas grandes
-  utils/            Utilidades puras de texto, audio y nombres de archivo
+  controllers/      Coordination between UI and services
+  models/           Shared data, enums, and result objects
+  services/         Metadata, backups, cover art, files, audio, and playlist logic
+  ui/               Main app and extracted UI workflows
+  views/            Tkinter panels and windows
+  views/modals/     Editing, preview, backup, report, and appearance modals
+  ui_helpers/       Reusable widgets, dialogs, and tooltips
+  utils/            Pure helpers for text, audio, and filenames
 ```
