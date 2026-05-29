@@ -137,11 +137,11 @@ class AppLifecycleMixin:
 
     def _sort_options(self) -> list[str]:
         return [
+            self.t("sort.by_track_number"),
             self.t("sort.manual"),
             self.t("sort.by_name"),
             self.t("sort.by_artist"),
             self.t("sort.by_album"),
-            self.t("sort.by_track_number"),
             self.t("sort.by_duration"),
             self.t("sort.by_bitrate"),
             self.t("sort.by_date"),
@@ -213,7 +213,7 @@ class AppLifecycleMixin:
             SortMode.DATE_ADDED: self.t("sort.by_date"),
             SortMode.LAST_PLAYED: self.t("sort.by_last_played"),
         }
-        return mapping.get(mode, self.t("sort.by_name"))
+        return mapping.get(mode, self.t("sort.by_track_number"))
 
     def _sort_mode_from_text(self, value: str) -> SortMode:
         mapping = {
@@ -227,7 +227,7 @@ class AppLifecycleMixin:
             self.t("sort.by_date"): SortMode.DATE_ADDED,
             self.t("sort.by_last_played"): SortMode.LAST_PLAYED,
         }
-        return mapping.get(value, SortMode.FILENAME)
+        return mapping.get(value, SortMode.TRACK_NUMBER)
 
     def _load_config(self) -> None:
         try:

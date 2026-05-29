@@ -12,6 +12,9 @@ from ..services.audio_quality_service import format_audio_quality
 from ..utils.text_cleanup import remove_feature_text
 
 
+COVER_SIZE = 112
+
+
 class PreviewPanel(ttk.Frame):
     def __init__(
         self,
@@ -39,9 +42,11 @@ class PreviewPanel(ttk.Frame):
     def _setup_ui(self) -> None:
         self.main_frame = ttk.LabelFrame(self, text=self.t("preview.title"))
         self.main_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        self.main_frame.columnconfigure(1, weight=1)
+        self.main_frame.rowconfigure(0, weight=1)
 
         cover_frame = ttk.Frame(self.main_frame)
-        cover_frame.pack(side="left", fill="y", padx=(4, 18), pady=(0, 2))
+        cover_frame.grid(row=0, column=0, sticky="nw", padx=(12, 16), pady=(8, 6))
         self.cover_frame = cover_frame
 
         self.cover_label = ttk.Label(cover_frame, text=self.t("preview.no_cover"))
@@ -55,7 +60,7 @@ class PreviewPanel(ttk.Frame):
         self.cover_hint_label.pack(fill="x", pady=(6, 0))
 
         info_frame = ttk.Frame(self.main_frame)
-        info_frame.pack(side="right", fill="both", expand=True, padx=(0, 4), pady=(0, 2))
+        info_frame.grid(row=0, column=1, sticky="nsew", padx=(0, 12), pady=(8, 6))
         self._create_info_section(info_frame)
         if self.show_inline_editor:
             self._create_editor_section(info_frame)
@@ -100,31 +105,39 @@ class PreviewPanel(ttk.Frame):
 
         info_container = ttk.Frame(parent)
         info_container.pack(fill="both", expand=True)
+        info_container.columnconfigure(1, weight=1)
+        info_container.columnconfigure(3, weight=1)
 
         self.info_labels: dict[str, ttk.Label] = {}
         self.field_name_labels: dict[str, ttk.Label] = {}
-        fields = [
-            ("preview.artist", "artist"),
-            ("preview.album_artist", "album_artist"),
-            ("preview.album", "album"),
-            ("preview.year", "year"),
-            ("preview.genre", "genre"),
-            ("preview.track", "track_number"),
-            ("preview.comment", "comment"),
-            ("preview.duration", "duration"),
-            ("preview.audio_quality", "audio_quality"),
-            ("preview.file", "file_name"),
+        field_layout = [
+            (0, 0, "preview.artist", "artist", 1),
+            (0, 2, "preview.album_artist", "album_artist", 1),
+            (1, 0, "preview.album", "album", 1),
+            (1, 2, "preview.year", "year", 1),
+            (2, 0, "preview.genre", "genre", 1),
+            (2, 2, "preview.track", "track_number", 1),
+            (3, 0, "preview.comment", "comment", 1),
+            (3, 2, "preview.duration", "duration", 1),
+            (4, 0, "preview.audio_quality", "audio_quality", 3),
+            (5, 0, "preview.file", "file_name", 3),
         ]
 
-        for label_key, field_name in fields:
-            row_frame = ttk.Frame(info_container)
-            row_frame.pack(fill="x", pady=3)
-            label = ttk.Label(row_frame, text=f"{self.t(label_key)}:", width=10, anchor="w")
-            label.pack(side="left")
-            value_label = ttk.Label(row_frame, text="-", anchor="w")
-            value_label.pack(side="left", fill="x", expand=True, padx=(5, 0))
+        for row, column, label_key, field_name, value_span in field_layout:
+            label = ttk.Label(info_container, text=f"{self.t(label_key)}:", width=11, anchor="w")
+            label.grid(row=row, column=column, sticky="nw", padx=(0, 6), pady=2)
+            value_label = ttk.Label(info_container, text="-", anchor="w", justify="left")
+            value_label.grid(
+                row=row,
+                column=column + 1,
+                columnspan=value_span,
+                sticky="ew",
+                padx=(0, 16 if column == 0 and value_span == 1 else 0),
+                pady=2,
+            )
             self.field_name_labels[field_name] = label
             self.info_labels[field_name] = value_label
+        info_container.bind("<Configure>", self._update_info_wraplengths, add="+")
 
     def _create_editor_section(self, parent) -> None:
         self.editor_frame = ttk.LabelFrame(parent, text=self.t("preview.editor_title"))
@@ -220,14 +233,14 @@ class PreviewPanel(ttk.Frame):
 
     def _create_default_cover(self) -> None:
         try:
-            image = Image.new("RGB", (140, 140), color="#eeeeeb")
+            image = Image.new("RGB", (COVER_SIZE, COVER_SIZE), color="#eeeeeb")
             draw = ImageDraw.Draw(image)
             try:
                 font = ImageFont.truetype("arial.ttf", 18)
             except Exception:
                 font = ImageFont.load_default()
             draw.multiline_text(
-                (60, 60),
+                (COVER_SIZE // 2, COVER_SIZE // 2),
                 self.t("preview.default_cover"),
                 fill="#666666",
                 font=font,
@@ -313,6 +326,7 @@ class PreviewPanel(ttk.Frame):
 
         for field, value in info_mapping.items():
             self.info_labels[field].configure(text=value or "-")
+        self._update_info_wraplengths()
 
         for field in self.edit_vars:
             self.edit_vars[field].set(str(song_data.get(field, "") or ""))
@@ -325,12 +339,12 @@ class PreviewPanel(ttk.Frame):
             if isinstance(cover_data, bytes):
                 with Image.open(io.BytesIO(cover_data)) as image:
                     image = image.convert("RGB")
-                    image = image.resize((140, 140), Image.LANCZOS)
+                    image = image.resize((COVER_SIZE, COVER_SIZE), Image.LANCZOS)
                     self.cover_image = ImageTk.PhotoImage(image)
             elif isinstance(cover_data, str) and os.path.exists(cover_data):
                 with Image.open(cover_data) as image:
                     image = image.convert("RGB")
-                    image = image.resize((140, 140), Image.LANCZOS)
+                    image = image.resize((COVER_SIZE, COVER_SIZE), Image.LANCZOS)
                     self.cover_image = ImageTk.PhotoImage(image)
             else:
                 self.cover_image = self.default_cover
@@ -390,7 +404,7 @@ class PreviewPanel(ttk.Frame):
                 return
             with Image.open(cover_path) as image:
                 image = image.convert("RGB")
-                image = image.resize((140, 140), Image.LANCZOS)
+                image = image.resize((COVER_SIZE, COVER_SIZE), Image.LANCZOS)
                 self.cover_image = ImageTk.PhotoImage(image)
             self.cover_label.configure(image=self.cover_image, text="")
             if self.current_song_data is not None:
@@ -425,3 +439,13 @@ class PreviewPanel(ttk.Frame):
         for label in self.info_labels.values():
             label.configure(text=self.t("preview.error"))
         self.cover_label.configure(image=self.default_cover, text="")
+
+    def _update_info_wraplengths(self, _event=None) -> None:
+        try:
+            width = max(180, self.info_labels["audio_quality"].winfo_width())
+        except Exception:
+            width = 360
+        for field in ("audio_quality", "file_name", "comment"):
+            label = self.info_labels.get(field)
+            if label is not None:
+                label.configure(wraplength=width)

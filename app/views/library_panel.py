@@ -89,7 +89,7 @@ def build_library_panel(
     toolbar = ttk.Frame(frame)
     toolbar.grid(row=0, column=0, sticky="ew", pady=(0, 10))
 
-    sort_var = tk.StringVar(value=t("sort.by_name"))
+    sort_var = tk.StringVar(value=t("sort.by_track_number"))
     search_var = tk.StringVar(value="")
     filter_var = tk.StringVar(value=t("filter.all"))
 

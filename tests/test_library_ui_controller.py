@@ -113,7 +113,7 @@ class LibraryUiControllerTests(unittest.TestCase):
             )
 
             self.assertEqual(tree.items[0]["text"], "Artista - Tema")
-            self.assertEqual(tree.items[0]["values"][0], 0)
+            self.assertEqual(tree.items[0]["values"][0], 1)
             self.assertEqual(tree.items[0]["tags"], ("song.mp3", "odd_row"))
             self.assertEqual(tree.x_position, 0)
             self.assertEqual(tree.y_position, 0)

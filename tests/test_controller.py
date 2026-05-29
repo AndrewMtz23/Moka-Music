@@ -159,3 +159,47 @@ class ControllerTests(unittest.TestCase):
             self.assertTrue(result.success)
             self.assertEqual(fake_editor.applied_metadata[0][1], {"title": "Old title"})
             self.assertEqual(fake_editor.applied_covers[0][1], cover_art)
+
+    def test_apply_track_numbers_from_order_starts_at_zero(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            (folder / "a.mp3").write_bytes(b"fake")
+            (folder / "b.mp3").write_bytes(b"fake")
+            controller = MetadataController()
+            controller.carpeta = str(folder)
+            controller.archivos = ["a.mp3", "b.mp3"]
+            fake_editor = FakeMetadataEditor()
+            controller.metadata_editor = fake_editor
+
+            result = controller.apply_track_numbers_from_order()
+
+            self.assertTrue(result.success)
+            self.assertEqual(
+                [metadata for _paths, metadata in fake_editor.applied_metadata],
+                [{"track_number": "0"}, {"track_number": "1"}],
+            )
+
+    def test_editing_track_number_shifts_existing_tracks(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            for filename in ("zero.mp3", "one.mp3", "two.mp3"):
+                (folder / filename).write_bytes(b"fake")
+            controller = MetadataController()
+            controller.carpeta = str(folder)
+            controller.archivos = ["zero.mp3", "one.mp3", "two.mp3"]
+            controller._metadata_cache = {
+                "zero.mp3": TrackInfo("zero.mp3", str(folder / "zero.mp3"), {"track_number": "0"}, 0.0, None),
+                "one.mp3": TrackInfo("one.mp3", str(folder / "one.mp3"), {"track_number": "1"}, 0.0, None),
+                "two.mp3": TrackInfo("two.mp3", str(folder / "two.mp3"), {"track_number": "2"}, 0.0, None),
+            }
+            fake_editor = FakeMetadataEditor()
+            controller.metadata_editor = fake_editor
+
+            result = controller.aplicar_cambios_a_archivo("zero.mp3", {"track_number": "1"})
+
+            self.assertTrue(result.success)
+            self.assertEqual(result.data["shifted_filenames"], ["two.mp3", "one.mp3"])
+            self.assertEqual(
+                [metadata for _paths, metadata in fake_editor.applied_metadata],
+                [{"track_number": "3"}, {"track_number": "2"}, {"track_number": "1"}],
+            )

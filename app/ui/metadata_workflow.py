@@ -38,6 +38,7 @@ from ..views.modals.file_plan_preview_modal import confirm_file_plan_preview, sh
 from ..views.modals.online_metadata_modal import request_online_metadata_selection
 from ..views.modals.metadata_import_preview_modal import confirm_metadata_import
 from ..views.modals.playlist_insert_preview_modal import request_playlist_insert_preview
+from ..views.modals.track_position_modal import request_track_position
 from ..views.modals.rename_metadata_modal import confirm_rename_metadata
 from ..views.modals.search_replace_metadata_modal import request_search_replace_metadata
 
@@ -1398,12 +1399,16 @@ class MetadataWorkflowMixin:
             messagebox.showwarning(self.t("dialog.selection"), self.t("message.reorder_needs_full_view"))
             return
 
-        position = simpledialog.askinteger(
-            self.t("playlist_insert.title"),
-            self.t("playlist_insert.prompt", count=len(filenames), total=len(controller.archivos)),
-            parent=self.root,
-            minvalue=1,
-            maxvalue=len(controller.archivos),
+        position = request_track_position(
+            self.root,
+            self.t,
+            title=self.t("playlist_insert.title"),
+            prompt=self.t("playlist_insert.prompt", count=len(filenames), total=len(controller.archivos)),
+            total=len(controller.archivos),
+            initial=0,
+            min_position=0,
+            max_position=max(0, len(controller.archivos) - 1),
+            confirm_text=self.t("playlist_insert.confirm_position"),
         )
         if position is None:
             return
@@ -1412,7 +1417,7 @@ class MetadataWorkflowMixin:
             controller=controller,
             tree=tree,
             filenames=filenames,
-            position=position,
+            position=position + 1,
         )
         if not plan.items:
             messagebox.showinfo(self.t("dialog.done"), self.t("change_preview.no_changes"))
@@ -1448,7 +1453,8 @@ class MetadataWorkflowMixin:
             progress.close()
         self._preview_filename = result.preview_filename
         self._refresh_changed_library_pairs([(controller, tree, plan.final_order)], result.changed_pairs)
-        self._set_sort_widget_for_controller(controller, SortMode.MANUAL)
+        controller.set_sort_mode(SortMode.TRACK_NUMBER)
+        self._set_sort_widget_for_controller(controller, SortMode.TRACK_NUMBER)
 
         if self._preview_controller is controller and self._preview_filename:
             self._select_filename_in_tree(tree, self._preview_filename)
@@ -1523,7 +1529,8 @@ class MetadataWorkflowMixin:
             progress.close()
         self._preview_filename = result.preview_filename
         self._refresh_changed_library_pairs([(controller, tree, plan.final_order)], result.changed_pairs)
-        self._set_sort_widget_for_controller(controller, SortMode.MANUAL)
+        controller.set_sort_mode(SortMode.TRACK_NUMBER)
+        self._set_sort_widget_for_controller(controller, SortMode.TRACK_NUMBER)
 
         if self._preview_controller is controller and self._preview_filename:
             self._select_filename_in_tree(tree, self._preview_filename)

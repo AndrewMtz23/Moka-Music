@@ -116,7 +116,7 @@ class LibraryServiceTests(unittest.TestCase):
     def test_filter_files_searches_metadata_and_special_filters(self):
         self.assertEqual(filter_files(self.files, self.cache, "last"), ["d.mp3"])
         self.assertEqual(filter_files(self.files, self.cache, mode=FilterMode.MISSING_ARTIST), ["c.mp3"])
-        self.assertEqual(filter_files(self.files, self.cache, mode=FilterMode.MISSING_TRACK), ["c.mp3"])
+        self.assertEqual(filter_files(self.files, self.cache, mode=FilterMode.MISSING_TRACK), [])
         self.assertEqual(filter_files(self.files, self.cache, mode=FilterMode.DUPLICATES), ["b.mp3", "a.mp3"])
         self.assertEqual(filter_files(self.files, self.cache, mode=FilterMode.LOW_BITRATE), ["b.mp3"])
         self.assertEqual(filter_files(self.files, self.cache, mode=FilterMode.BITRATE_128), ["b.mp3"])
@@ -176,11 +176,25 @@ class LibraryServiceTests(unittest.TestCase):
         self.assertEqual(report["missing_artist"], 1)
         self.assertEqual(report["missing_album"], 1)
         self.assertEqual(report["missing_year"], 1)
-        self.assertEqual(report["missing_track"], 1)
+        self.assertEqual(report["missing_track"], 0)
         self.assertEqual(report["duplicate_groups"], 1)
         self.assertEqual(report["duplicate_tracks"], 2)
         self.assertEqual(report["low_bitrate"], 1)
         self.assertEqual(report["possibly_corrupt"], 1)
+
+    def test_sort_files_by_track_number_treats_zero_as_valid(self):
+        files = ["missing.mp3", "two.mp3", "zero.mp3", "bad.mp3"]
+        cache = {
+            "zero.mp3": track("zero.mp3", {"track_number": "0"}),
+            "two.mp3": track("two.mp3", {"track_number": "2"}),
+            "bad.mp3": track("bad.mp3", {"track_number": "x"}),
+            "missing.mp3": track("missing.mp3", {}),
+        }
+
+        self.assertEqual(
+            sort_files(files, cache, SortMode.TRACK_NUMBER, lambda _name: 0.0),
+            ["zero.mp3", "two.mp3", "bad.mp3", "missing.mp3"],
+        )
 
     def test_duplicate_filter_uses_fuzzy_matching(self):
         files = ["one.mp3", "two.mp3"]
@@ -190,6 +204,16 @@ class LibraryServiceTests(unittest.TestCase):
         }
 
         self.assertEqual(filter_files(files, cache, mode=FilterMode.DUPLICATES), files)
+
+    def test_duplicate_filter_includes_repeated_track_numbers(self):
+        files = ["first.mp3", "second.mp3", "third.mp3"]
+        cache = {
+            "first.mp3": track("first.mp3", {"title": "A", "artist": "A", "track_number": "7"}),
+            "second.mp3": track("second.mp3", {"title": "B", "artist": "B", "track_number": "7"}),
+            "third.mp3": track("third.mp3", {"title": "C", "artist": "C", "track_number": "8"}),
+        }
+
+        self.assertEqual(filter_files(files, cache, mode=FilterMode.DUPLICATES), ["first.mp3", "second.mp3"])
 
 
 if __name__ == "__main__":

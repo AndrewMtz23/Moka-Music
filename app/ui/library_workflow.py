@@ -233,9 +233,10 @@ class LibraryWorkflowMixin:
         moved = filenames.pop(source_index)
         filenames.insert(target_index, moved)
         controller.reorder_files(filenames)
-        self._set_sort_widget_for_controller(controller, SortMode.MANUAL)
 
         result = controller.apply_track_numbers_from_order()
+        controller.set_sort_mode(SortMode.TRACK_NUMBER)
+        self._set_sort_widget_for_controller(controller, SortMode.TRACK_NUMBER)
         self._refresh_library_tree(controller, tree)
         for item_id in tree.get_children():
             if self._filename_from_tree_item(tree.item(item_id)) == moved:
@@ -274,7 +275,7 @@ class LibraryWorkflowMixin:
         )
 
     def _set_sort_widget_for_controller(self, controller: MetadataController, mode: SortMode) -> None:
-        for sort_menu, sort_var, widget_controller in self._sort_widgets:
+        for sort_menu, sort_var, widget_controller in getattr(self, "_sort_widgets", []):
             if widget_controller is controller:
                 sort_var.set(self._sort_text_for_mode(mode))
                 sort_menu.configure(values=self._sort_options())
@@ -305,14 +306,13 @@ class LibraryWorkflowMixin:
         self._library_ui_controller().apply_tree_colors(tree)
 
     def _sort_files(self, controller: MetadataController, tree, sort_option: str) -> None:
-        self._library_ui_controller().sort_files(
-            controller=controller,
-            sort_option=sort_option,
-            sort_mode_from_text=self._sort_mode_from_text,
-        )
+        controller.set_sort_mode(SortMode.TRACK_NUMBER)
+        self._set_sort_widget_for_controller(controller, SortMode.TRACK_NUMBER)
         self._refresh_library_tree(controller, tree)
 
     def _refresh_library_tree(self, controller: MetadataController, tree) -> None:
+        controller.set_sort_mode(SortMode.TRACK_NUMBER)
+        self._set_sort_widget_for_controller(controller, SortMode.TRACK_NUMBER)
         panel_name = self._library_debug_name(controller, tree)
         panel = self._get_library_panel(controller, tree)
         query = self._panel_search_query(panel) if panel else ""

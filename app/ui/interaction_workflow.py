@@ -1,7 +1,8 @@
 ﻿from __future__ import annotations
 
+import os
 from pathlib import Path
-from tkinter import messagebox, simpledialog
+from tkinter import messagebox
 
 from ..controllers.add_music_controller import abrir_selector_archivo, agregar_a_lista
 from ..controllers.metadata_controller import MetadataController
@@ -9,6 +10,7 @@ from ..models import SortMode
 from ..services.playback_history_service import record_playback
 from ..utils.ui_formatting import format_action_error
 from ..views.modals.incoming_folder_guide_modal import show_incoming_folder_guide
+from ..views.modals.track_position_modal import request_track_position
 
 
 class InteractionWorkflowMixin:
@@ -147,12 +149,15 @@ class InteractionWorkflowMixin:
         if filename not in self.controller_principal.archivos:
             return
         total = len(self.controller_principal.archivos)
-        position = simpledialog.askinteger(
-            self.t("move_position.title"),
-            self.t("move_position.prompt", name=filename, total_minus_one=max(0, total - 1)),
-            parent=self.root,
-            minvalue=0,
-            maxvalue=max(0, total - 1),
+        position = request_track_position(
+            self.root,
+            self.t,
+            title=self.t("move_position.title"),
+            prompt=self.t("move_position.prompt", name=filename, total=total),
+            total=total,
+            initial=max(0, total - 1),
+            min_position=0,
+            max_position=max(0, total - 1),
         )
         if position is None:
             self._select_filename_in_tree(self.tree_principal, filename)
@@ -161,10 +166,16 @@ class InteractionWorkflowMixin:
         insert_at = max(0, min(int(position), len(order)))
         order[insert_at:insert_at] = [filename]
         self.controller_principal.reorder_files(order)
+        result = self.controller_principal.apply_track_numbers_from_order()
+        for name in self.controller_principal.archivos:
+            self.song_info.invalidate(os.path.join(self.controller_principal.carpeta, name))
+        self.controller_principal.set_sort_mode(SortMode.TRACK_NUMBER)
         self._refresh_library_tree(self.controller_principal, self.tree_principal)
-        self._set_sort_widget_for_controller(self.controller_principal, SortMode.MANUAL)
+        self._set_sort_widget_for_controller(self.controller_principal, SortMode.TRACK_NUMBER)
         self._select_filename_in_tree(self.tree_principal, filename)
         self._load_song_preview(self.controller_principal, filename)
+        if not result.success:
+            self._handle_action_result(result)
 
     def _show_incoming_folder_guide(self) -> None:
         if not self._ensure_incoming_context():

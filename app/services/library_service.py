@@ -31,7 +31,7 @@ def sort_files(
     elif mode == SortMode.ALBUM:
         sorted_files.sort(key=lambda value: metadata_sort_value(value, metadata_cache, "album"))
     elif mode == SortMode.TRACK_NUMBER:
-        sorted_files.sort(key=lambda value: track_number(value, metadata_cache))
+        sorted_files.sort(key=lambda value: track_number_sort_value(value, metadata_cache))
     elif mode == SortMode.DURATION:
         sorted_files.sort(key=lambda value: duration(value, metadata_cache))
     elif mode == SortMode.BITRATE:
@@ -76,6 +76,16 @@ def track_number(filename: str, metadata_cache: MetadataCache) -> int:
         return int(metadata.get("track_number", 0))
     except (TypeError, ValueError):
         return 0
+
+
+def track_number_sort_value(filename: str, metadata_cache: MetadataCache) -> tuple[bool, int, str]:
+    metadata = metadata_for(filename, metadata_cache)
+    value = str(metadata.get("track_number", "") or "").strip()
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return (True, 0, filename.lower())
+    return (False, max(0, number), filename.lower())
 
 
 def filter_files(
@@ -141,7 +151,12 @@ def matches_filter(
         return not str(metadata.get("year", "")).strip()
     if mode == FilterMode.MISSING_TRACK:
         value = str(metadata.get("track_number", "")).strip()
-        return not value or value == "0"
+        if not value:
+            return True
+        try:
+            return int(value) < 0
+        except ValueError:
+            return True
     if mode == FilterMode.MISSING_COVER:
         return not bool(has_cover_art and has_cover_art(filename))
     if mode == FilterMode.DUPLICATES:
@@ -179,7 +194,28 @@ def duplicate_filenames(files: list[str], metadata_cache: MetadataCache) -> set[
         for filename in filenames
     }
     duplicates.update(fuzzy_duplicate_filenames(files, metadata_cache))
+    duplicates.update(duplicate_track_number_filenames(files, metadata_cache))
     return duplicates
+
+
+def duplicate_track_number_filenames(files: list[str], metadata_cache: MetadataCache) -> set[str]:
+    groups: dict[int, list[str]] = {}
+    for filename in files:
+        metadata = metadata_for(filename, metadata_cache)
+        value = str(metadata.get("track_number", "") or "").strip()
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            continue
+        if number < 0:
+            continue
+        groups.setdefault(number, []).append(filename)
+    return {
+        filename
+        for filenames in groups.values()
+        if len(filenames) > 1
+        for filename in filenames
+    }
 
 
 def fuzzy_duplicate_filenames(files: list[str], metadata_cache: MetadataCache, threshold: float = 0.92) -> set[str]:
@@ -225,7 +261,11 @@ def quality_report(files: list[str], metadata_cache: MetadataCache) -> dict[str,
             report["missing_year"] += 1
 
         value = str(metadata.get("track_number", "")).strip()
-        if not value or value == "0":
+        try:
+            missing_track = not value or int(value) < 0
+        except ValueError:
+            missing_track = True
+        if missing_track:
             report["missing_track"] += 1
 
         quality = audio_quality_for(filename, metadata_cache)

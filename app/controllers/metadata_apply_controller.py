@@ -103,6 +103,8 @@ class MetadataApplyController:
         if getattr(result, "success", False):
             if controller.carpeta:
                 song_info.invalidate(os.path.join(controller.carpeta, filename))
+                for shifted_filename in self._shifted_filenames(result):
+                    song_info.invalidate(os.path.join(controller.carpeta, shifted_filename))
             if tree is not None:
                 changed_pairs.add((id(controller), id(tree)))
         return SingleMetadataApplyResult(result=result, changed_pairs=changed_pairs)
@@ -155,6 +157,9 @@ class MetadataApplyController:
                 if getattr(result, "success", False):
                     total_success += 1
                     changed_pairs.add((id(controller), id(tree)))
+                    for shifted_filename in self._shifted_filenames(result):
+                        if controller.carpeta:
+                            song_info.invalidate(os.path.join(controller.carpeta, shifted_filename))
                 else:
                     all_errors.extend(getattr(result, "errors", []) or [getattr(result, "message", filename)])
                 if controller.carpeta:
@@ -169,6 +174,16 @@ class MetadataApplyController:
             affected_preview=affected_preview,
             changed_pairs=changed_pairs,
         )
+
+    def _shifted_filenames(self, result) -> list[str]:
+        data = getattr(result, "data", None)
+        if not isinstance(data, dict):
+            return []
+        return [
+            str(filename)
+            for filename in data.get("shifted_filenames", [])
+            if filename
+        ]
 
     def apply_all(
         self,

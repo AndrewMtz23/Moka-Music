@@ -49,7 +49,13 @@ class LibraryUiController:
             full_path = os.path.join(controller.carpeta, filename) if controller and controller.carpeta else filename
             row_tag = "even_row" if (index + 1) % 2 == 0 else "odd_row"
             issue_tags = tuple(f"issue_{key}" for key in issue_keys)
-            tree.insert("", "end", text=display_name, values=(index, full_path), tags=(filename, row_tag, *issue_tags))
+            tree.insert(
+                "",
+                "end",
+                text=display_name,
+                values=(self.display_track_number(controller, filename, index), full_path),
+                tags=(filename, row_tag, *issue_tags),
+            )
         if not files:
             message = self.empty_library_message(controller, panel)
             tree.insert("", "end", text=message, values=("", ""), tags=("placeholder",))
@@ -122,6 +128,17 @@ class LibraryUiController:
         if artist and artist.lower() not in title.lower():
             return f"{artist} - {title}"
         return title
+
+    def display_track_number(self, controller, filename: str, fallback: int) -> int:
+        if controller is None:
+            return fallback
+        cached = controller.get_track_info(filename)
+        metadata = cached.metadata if cached else {}
+        value = str(metadata.get("track_number", "") or "").strip()
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return fallback
 
     def issue_keys(self, controller, filename: str, duplicate_set: set[str]) -> list[str]:
         if controller is None:

@@ -29,7 +29,7 @@ class MetadataController:
         self.portada_path: Optional[str] = None
         self._metadata_cache: dict[str, TrackInfo] = {}
         self._cover_cache: dict[str, bool] = {}
-        self._sort_mode = SortMode.FILENAME
+        self._sort_mode = SortMode.TRACK_NUMBER
         self._played_paths: set[str] = set()
         self._last_played_by_path: dict[str, str] = {}
         self.logger = logging.getLogger(__name__)
@@ -69,7 +69,7 @@ class MetadataController:
         self.portada_path = None
         self._metadata_cache.clear()
         self._cover_cache.clear()
-        self._sort_mode = SortMode.FILENAME
+        self._sort_mode = SortMode.TRACK_NUMBER
 
     def register_file(self, filename: str) -> None:
         if filename not in self.archivos:
@@ -254,6 +254,13 @@ class MetadataController:
         if not validation.success:
             return validation
 
+        shifted_filenames: list[str] = []
+        if "track_number" in metadatos:
+            shift_result = self._shift_track_numbers_for_edit(filename, metadatos.get("track_number", ""))
+            if not shift_result.success:
+                return shift_result
+            shifted_filenames = list((shift_result.data or {}).get("shifted_filenames", []))
+
         success_count, errors = self.metadata_editor.aplicar_metadatos_en_lote(
             [filepath],
             metadatos,
@@ -266,7 +273,11 @@ class MetadataController:
             )
 
         self._precache_metadata(filename)
-        return ActionResult.ok(self.t("message.song_metadata_saved"))
+        self._apply_sorting()
+        return ActionResult.ok(
+            self.t("message.song_metadata_saved"),
+            data={"shifted_filenames": shifted_filenames},
+        )
 
     def aplicar_cambios_a_archivos(
         self,
@@ -282,6 +293,12 @@ class MetadataController:
         if not validation.success:
             return 0, [validation.message]
 
+        if "track_number" in metadatos and len(selected) == 1:
+            result = self.aplicar_cambios_a_archivo(selected[0], metadatos, portada_path)
+            if result.success:
+                return 1, []
+            return 0, result.errors or [result.message]
+
         rutas = [os.path.join(self.carpeta, filename) for filename in selected]
         success_count, errors = self.metadata_editor.aplicar_metadatos_en_lote(
             rutas,
@@ -291,7 +308,75 @@ class MetadataController:
         if success_count:
             for filename in selected:
                 self._precache_metadata(filename)
+            self._apply_sorting()
         return success_count, errors
+
+    def _shift_track_numbers_for_edit(self, edited_filename: str, target_value: str) -> ActionResult:
+        try:
+            target_number = int(str(target_value).strip())
+        except (TypeError, ValueError):
+            return ActionResult.ok("", data={"shifted_filenames": []})
+        if target_number < 0:
+            return ActionResult.ok("", data={"shifted_filenames": []})
+
+        current_number = self._track_number_for_file(edited_filename)
+        if current_number == target_number:
+            return ActionResult.ok("", data={"shifted_filenames": []})
+
+        affected: list[tuple[int, str]] = []
+        for filename in self.archivos:
+            if filename == edited_filename:
+                continue
+            number = self._track_number_for_file(filename)
+            if number is None:
+                continue
+            if current_number is not None and current_number > target_number:
+                should_shift = target_number <= number < current_number
+            else:
+                should_shift = number >= target_number
+            if should_shift:
+                affected.append((number, filename))
+
+        shifted: list[str] = []
+        errors: list[str] = []
+        for number, filename in sorted(affected, reverse=True):
+            filepath = os.path.join(self.carpeta, filename)
+            new_number = number + 1
+            success, file_errors = self.metadata_editor.aplicar_metadatos_en_lote(
+                [filepath],
+                {"track_number": str(new_number)},
+            )
+            if success:
+                shifted.append(filename)
+                self._set_cached_track_number(filename, new_number)
+            else:
+                errors.extend(file_errors or [filename])
+
+        if errors:
+            return ActionResult.fail(
+                self.t("message.could_not_apply_metadata"),
+                errors=errors,
+                data={"shifted_filenames": shifted},
+            )
+        return ActionResult.ok("", data={"shifted_filenames": shifted})
+
+    def _track_number_for_file(self, filename: str) -> Optional[int]:
+        cached = self._metadata_cache.get(filename)
+        metadata = cached.metadata if cached else {}
+        value = str(metadata.get("track_number", "") or "").strip()
+        if not value:
+            return None
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            return None
+        return number if number >= 0 else None
+
+    def _set_cached_track_number(self, filename: str, track_number: int) -> None:
+        cached = self._metadata_cache.get(filename)
+        if cached is None:
+            return
+        cached.metadata["track_number"] = str(track_number)
 
     def validar_datos(self, datos: dict[str, str]) -> ActionResult:
         year_value = datos.get("year", "")
@@ -335,7 +420,7 @@ class MetadataController:
 
         errors: list[str] = []
         success_count = 0
-        for index, filename in enumerate(self.archivos, start=1):
+        for index, filename in enumerate(self.archivos, start=0):
             filepath = os.path.join(self.carpeta, filename)
             success, file_errors = self.metadata_editor.aplicar_metadatos_en_lote(
                 [filepath],
@@ -399,7 +484,11 @@ class MetadataController:
         if not str(metadata.get("year", "") or "").strip():
             issues.append("missing_year")
         track_value = str(metadata.get("track_number", "") or "").strip()
-        if not track_value or track_value == "0":
+        try:
+            missing_track = not track_value or int(track_value) < 0
+        except ValueError:
+            missing_track = True
+        if missing_track:
             issues.append("missing_track")
         if not self._has_cover_art(filename):
             issues.append("missing_cover")
