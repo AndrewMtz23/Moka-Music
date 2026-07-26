@@ -6,6 +6,7 @@ from typing import Optional
 import eyed3
 import eyed3.id3
 import mutagen
+from mutagen.mp4 import MP4, MP4Cover
 
 from ..constants import DEFAULT_METADATA, FileFormats
 from .cover_service import process_cover_image
@@ -162,6 +163,10 @@ class MetadataEditor:
             )
             return
 
+        if isinstance(audio, MP4):
+            audio["covr"] = [MP4Cover(image_data, imageformat=MP4Cover.FORMAT_JPEG)]
+            return
+
         if isinstance(audio, mutagen.FileType):
             if audio.tags is None:
                 audio.add_tags()
@@ -211,6 +216,10 @@ class MetadataEditor:
             audio = mutagen.File(ruta)
             if audio and getattr(audio, "tags", None):
                 for key, value in audio.tags.items():
+                    if key == "covr" and isinstance(value, list):
+                        for cover in value:
+                            if isinstance(cover, (bytes, MP4Cover)):
+                                return bytes(cover)
                     if key.startswith("APIC") and hasattr(value, "data"):
                         return value.data
             return None
@@ -226,9 +235,14 @@ class MetadataEditor:
                 audio.tag.images.remove(image.description)
             return
 
+        if isinstance(audio, MP4):
+            if "covr" in audio:
+                del audio["covr"]
+            return
+
         if isinstance(audio, mutagen.FileType) and getattr(audio, "tags", None):
             for key in list(audio.tags.keys()):
-                if str(key).startswith("APIC"):
+                if str(key).startswith("APIC") or str(key) == "covr":
                     del audio.tags[key]
 
     def _validar_archivo(self, ruta: str) -> bool:

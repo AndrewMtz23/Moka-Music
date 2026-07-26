@@ -25,6 +25,12 @@ Formatos de audio soportados:
 - `.wav`
 - `.ogg`
 - `.flac`
+- `.m4a`
+- `.aac`
+- `.opus`
+- `.wma`
+
+La compatibilidad de reproduccion para los formatos extendidos puede depender de los codecs disponibles en `pygame`/SDL dentro del entorno del usuario. Las herramientas de metadata y biblioteca deben fallar de forma segura cuando un archivo concreto no pueda decodificarse.
 
 Cada biblioteca permite:
 
@@ -788,4 +794,3 @@ Ejemplo: preparar playlist.
 - Los cambios mas riesgosos suelen estar en metadata real, renombrado fisico y respaldos; deben probarse con copias de musica.
 - Para nuevas funciones, conviene poner logica pura en `services/` o `utils/`, coordinacion en `controllers/` y solo construccion visual en `views/`.
 - Cuando se agreguen textos visibles, hay que actualizar `app/i18n.py` para Espanol e Ingles.
-

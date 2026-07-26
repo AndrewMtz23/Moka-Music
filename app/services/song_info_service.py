@@ -6,6 +6,7 @@ from typing import Optional
 
 import eyed3
 import mutagen
+from mutagen.mp4 import MP4Cover
 from PIL import Image, UnidentifiedImageError
 
 from ..constants import DEFAULT_COVER_ART, FileFormats
@@ -123,6 +124,10 @@ class SongInfo:
         try:
             if hasattr(audio, "tags") and audio.tags:
                 for key, value in audio.tags.items():
+                    if key == "covr" and isinstance(value, list):
+                        for cover in value:
+                            if isinstance(cover, (bytes, MP4Cover)):
+                                return bytes(cover)
                     if key.startswith("APIC") and hasattr(value, "data"):
                         return value.data
         except Exception as exc:

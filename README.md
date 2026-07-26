@@ -70,6 +70,7 @@ If artist or title metadata is missing, MokaMusic tries to infer it from existin
 ## Core Features
 
 - Two side-by-side libraries: main and incoming.
+- Audio support for `.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, `.aac`, `.opus`, and `.wma`, with graceful errors when local codecs cannot decode a file.
 - Search by filename or metadata, with filters for missing fields, missing cover art, duplicates, and playback status.
 - Audio quality filters and sorting for low bitrate, approximate 256 kbps, and 320 kbps or higher.
 - Organized track list with multiple selection and manual ordering.

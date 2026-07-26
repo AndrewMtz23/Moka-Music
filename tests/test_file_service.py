@@ -35,22 +35,31 @@ class FileServiceTests(unittest.TestCase):
 
     def test_file_helpers_filter_and_format_supported_files(self):
         self.assertTrue(is_supported_audio_file("song.mp3"))
+        self.assertTrue(is_supported_audio_file("song.m4a"))
+        self.assertTrue(is_supported_audio_file("song.aac"))
+        self.assertTrue(is_supported_audio_file("song.opus"))
+        self.assertTrue(is_supported_audio_file("song.wma"))
         self.assertTrue(is_supported_image_file("cover.png"))
         self.assertFalse(is_supported_audio_file("notes.txt"))
 
         self.assertEqual(shorten_filename("very-long-track-name.mp3", max_len=12), "very-....mp3")
-        self.assertEqual(parse_dropped_audio_files("{C:/Music/a.mp3} C:/Music/b.txt C:/Music/c.flac"), ["C:/Music/a.mp3", "C:/Music/c.flac"])
+        self.assertEqual(
+            parse_dropped_audio_files("{C:/Music/a.mp3} C:/Music/b.txt C:/Music/c.flac C:/Music/d.m4a C:/Music/e.opus"),
+            ["C:/Music/a.mp3", "C:/Music/c.flac", "C:/Music/d.m4a", "C:/Music/e.opus"],
+        )
 
     def test_list_audio_files_returns_sorted_supported_filenames(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             folder = Path(temp_dir)
             (folder / "b.wav").write_bytes(b"fake")
             (folder / "a.mp3").write_bytes(b"fake")
+            (folder / "z.m4a").write_bytes(b"fake")
             (folder / "Artist").mkdir()
             (folder / "Artist" / "c.flac").write_bytes(b"fake")
+            (folder / "Artist" / "d.opus").write_bytes(b"fake")
             (folder / "cover.jpg").write_bytes(b"fake")
 
-            self.assertEqual(list_audio_files(folder), ["a.mp3", "Artist/c.flac", "b.wav"])
+            self.assertEqual(list_audio_files(folder), ["a.mp3", "Artist/c.flac", "Artist/d.opus", "b.wav", "z.m4a"])
 
     def test_add_song_to_library_copies_file_and_registers_it(self):
         with tempfile.TemporaryDirectory() as temp_dir:
