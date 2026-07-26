@@ -42,7 +42,7 @@ class DropControllerTests(unittest.TestCase):
             folder = Path(temp_dir)
             library = folder / "library"
             library.mkdir()
-            audio = folder / "song.mp3"
+            audio = folder / "song.m4a"
             audio.write_bytes(b"audio")
             image = folder / "cover.png"
             image.write_bytes(b"image")

@@ -54,7 +54,7 @@ DEFAULT_POLL_INTERVAL: Final[float] = 0.5
 
 
 class FileFormats:
-    AUDIO = (".mp3", ".wav", ".ogg", ".flac")
+    AUDIO = (".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac", ".opus", ".wma")
     IMAGES = (".jpg", ".jpeg", ".png", ".bmp", ".gif")
     COVERS = (".jpg", ".jpeg", ".png")
 
