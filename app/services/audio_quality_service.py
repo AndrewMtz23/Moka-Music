@@ -11,6 +11,15 @@ LOW_BITRATE_THRESHOLD_KBPS = 128
 
 def inspect_audio_quality(filepath: str | Path) -> dict[str, object]:
     path = Path(filepath)
+    try:
+        audio = mutagen.File(str(path))
+    except Exception:
+        return default_audio_quality(path, possibly_corrupt=True)
+    return inspect_audio_quality_from_audio(audio, path)
+
+
+def inspect_audio_quality_from_audio(audio, filepath: str | Path) -> dict[str, object]:
+    path = Path(filepath)
     quality: dict[str, object] = {
         "bitrate_kbps": 0,
         "sample_rate": 0,
@@ -21,7 +30,6 @@ def inspect_audio_quality(filepath: str | Path) -> dict[str, object]:
         "possibly_corrupt": False,
     }
     try:
-        audio = mutagen.File(str(path))
         if audio is None or getattr(audio, "info", None) is None:
             quality["possibly_corrupt"] = True
             return quality
@@ -41,6 +49,19 @@ def inspect_audio_quality(filepath: str | Path) -> dict[str, object]:
     except Exception:
         quality["possibly_corrupt"] = True
     return quality
+
+
+def default_audio_quality(filepath: str | Path, *, possibly_corrupt: bool = False) -> dict[str, object]:
+    path = Path(filepath)
+    return {
+        "bitrate_kbps": 0,
+        "sample_rate": 0,
+        "channels": "",
+        "format": path.suffix.lower().lstrip(".").upper(),
+        "file_size_mb": _file_size_mb(path),
+        "low_bitrate": False,
+        "possibly_corrupt": possibly_corrupt,
+    }
 
 
 def format_audio_quality(quality: dict[str, object]) -> str:

@@ -1,6 +1,9 @@
 ﻿from __future__ import annotations
 
 import os
+import queue
+import threading
+import time
 from tkinter import messagebox
 from typing import Optional
 
@@ -19,39 +22,170 @@ class LibraryWorkflowMixin:
                 return
             panel_name = self._library_debug_name(controller, tree)
             self.logger.info("[%s] Loading folder: %s", panel_name, selected_folder)
-            files = controller.cargar_archivos_mp3(selected_folder)
-            self.logger.info(
-                "[%s] Controller loaded %s files from %s",
-                panel_name,
-                len(files),
-                controller.carpeta,
+            load_start = time.perf_counter()
+            token = self._next_library_load_token(controller)
+            progress = self._begin_progress(
+                title=self.t("progress.library_title"),
+                message=self.t("progress.library_body"),
+                total=1,
             )
-            self._refresh_library_tree(controller, tree)
-            rendered_count = len(tree.get_children())
-            self.logger.info(
-                "[%s] Rendered %s rows after folder load",
-                panel_name,
-                rendered_count,
+            progress.update(0, 1, selected_folder)
+            self._start_library_load_worker(
+                token=token,
+                selected_folder=selected_folder,
+                controller=controller,
+                tree=tree,
+                panel_name=panel_name,
+                load_start=load_start,
+                progress=progress,
             )
-            if files:
-                children = tree.get_children()
-                if children:
-                    first_item = children[0]
-                    tree.selection_set(first_item)
-                    tree.focus(first_item)
-                    filename = self._filename_from_tree_item(tree.item(first_item))
-                    if filename:
-                        self._load_song_preview(controller, filename)
-            else:
-                self.preview.clear_preview()
-            target = "incoming" if controller is self.controller_nueva else "main"
-            self._remember_recent_folder(selected_folder, target)
-            self._setup_main_menu()
-            self._save_config()
-            self.logger.info("Loaded folder %s with %s files", selected_folder, len(files))
         except Exception as exc:
             self.logger.error("Error loading folder: %s", exc)
             messagebox.showerror(self.t("dialog.error"), self.t("message.could_not_load_folder", error=exc))
+
+    def _next_library_load_token(self, controller: MetadataController) -> int:
+        self._library_load_token_counter = getattr(self, "_library_load_token_counter", 0) + 1
+        if not hasattr(self, "_library_load_tokens"):
+            self._library_load_tokens = {}
+        self._library_load_tokens[id(controller)] = self._library_load_token_counter
+        return self._library_load_token_counter
+
+    def _library_queue(self) -> queue.Queue:
+        if not hasattr(self, "_library_load_queue"):
+            self._library_load_queue = queue.Queue()
+        return self._library_load_queue
+
+    def _start_library_load_worker(
+        self,
+        *,
+        token: int,
+        selected_folder: str,
+        controller: MetadataController,
+        tree,
+        panel_name: str,
+        load_start: float,
+        progress,
+    ) -> None:
+        queue_ref = self._library_queue()
+
+        def worker() -> None:
+            try:
+                worker_controller = MetadataController(translator=self.t, library_cache=controller.library_cache)
+                worker_controller.set_playback_history(controller._played_paths, controller._last_played_by_path)
+                files = worker_controller.cargar_archivos_mp3(selected_folder)
+                error = None
+            except Exception as exc:
+                worker_controller = None
+                files = []
+                error = exc
+            queue_ref.put(
+                {
+                    "token": token,
+                    "controller": controller,
+                    "tree": tree,
+                    "panel_name": panel_name,
+                    "selected_folder": selected_folder,
+                    "load_start": load_start,
+                    "progress": progress,
+                    "worker_controller": worker_controller,
+                    "files": files,
+                    "error": error,
+                }
+            )
+
+        threading.Thread(target=worker, daemon=True).start()
+        self.root.after(50, lambda: self._poll_library_load_queue(token))
+
+    def _poll_library_load_queue(self, token: int) -> None:
+        queue_ref = self._library_queue()
+        matched_item = None
+        pending_items = []
+        try:
+            while True:
+                item = queue_ref.get_nowait()
+                if item.get("token") == token:
+                    matched_item = item
+                    break
+                pending_items.append(item)
+        except queue.Empty:
+            pass
+        for item in pending_items:
+            queue_ref.put(item)
+        if matched_item is None:
+            self.root.after(50, lambda: self._poll_library_load_queue(token))
+            return
+        self._finish_library_load(matched_item)
+
+    def _finish_library_load(self, item: dict[str, object]) -> None:
+        progress = item["progress"]
+        try:
+            progress.update(1, 1)
+            progress.close()
+        except Exception:
+            pass
+        controller = item["controller"]
+        active_token = getattr(self, "_library_load_tokens", {}).get(id(controller))
+        if item.get("token") != active_token or getattr(progress, "cancelled", False):
+            self.logger.info("[%s] Ignored stale or cancelled folder load", item.get("panel_name"))
+            return
+        if item.get("error") is not None:
+            exc = item["error"]
+            self.logger.error("Error loading folder: %s", exc)
+            messagebox.showerror(self.t("dialog.error"), self.t("message.could_not_load_folder", error=exc))
+            return
+        tree = item["tree"]
+        panel_name = str(item["panel_name"])
+        selected_folder = str(item["selected_folder"])
+        load_start = float(item["load_start"])
+        worker_controller = item["worker_controller"]
+        files = list(item["files"])
+        controller_elapsed = time.perf_counter() - load_start
+        controller.adopt_loaded_state_from(worker_controller)
+        self.logger.info(
+            "[%s] Controller loaded %s files from %s in %.4fs",
+            panel_name,
+            len(files),
+            controller.carpeta,
+            controller_elapsed,
+        )
+        render_start = time.perf_counter()
+        self._refresh_library_tree(controller, tree)
+        render_elapsed = time.perf_counter() - render_start
+        rendered_count = len(tree.get_children())
+        self.logger.info(
+            "[%s] Rendered %s rows after folder load in %.4fs",
+            panel_name,
+            rendered_count,
+            render_elapsed,
+        )
+        preview_elapsed = 0.0
+        if files:
+            children = tree.get_children()
+            if children:
+                first_item = children[0]
+                tree.selection_set(first_item)
+                tree.focus(first_item)
+                filename = self._filename_from_tree_item(tree.item(first_item))
+                if filename:
+                    preview_start = time.perf_counter()
+                    self._load_song_preview(controller, filename)
+                    preview_elapsed = time.perf_counter() - preview_start
+        else:
+            self.preview.clear_preview()
+        target = "incoming" if controller is self.controller_nueva else "main"
+        self._remember_recent_folder(selected_folder, target)
+        self._setup_main_menu()
+        self._save_config()
+        self.logger.info(
+            "[%s] Folder load completed: files=%s controller=%.4fs render=%.4fs preview=%.4fs total=%.4fs metrics=%s",
+            panel_name,
+            len(files),
+            controller_elapsed,
+            render_elapsed,
+            preview_elapsed,
+            time.perf_counter() - load_start,
+            controller.load_metrics_snapshot(),
+        )
 
     def _clear_library_folder(self, controller: MetadataController, tree) -> None:
         if not controller.carpeta and not controller.archivos:
@@ -79,9 +213,13 @@ class LibraryWorkflowMixin:
             if self._filename_from_tree_item(tree.item(item_id))
         ]
         try:
+            refresh_start = time.perf_counter()
             files = controller.refresh_library()
+            controller_elapsed = time.perf_counter() - refresh_start
             self._sync_playback_history_to_controllers()
+            render_start = time.perf_counter()
             self._refresh_library_tree(controller, tree)
+            render_elapsed = time.perf_counter() - render_start
             restored = False
             for filename in selected:
                 if filename in controller.archivos:
@@ -94,6 +232,15 @@ class LibraryWorkflowMixin:
                     tree.selection_set(children[0])
                     tree.focus(children[0])
             self._show_toast(self.t("library.refresh_done", count=len(files)), kind="success")
+            self.logger.info(
+                "[%s] Folder refresh completed: files=%s controller=%.4fs render=%.4fs total=%.4fs metrics=%s",
+                self._library_debug_name(controller, tree),
+                len(files),
+                controller_elapsed,
+                render_elapsed,
+                time.perf_counter() - refresh_start,
+                controller.load_metrics_snapshot(),
+            )
         except Exception as exc:
             self.logger.error("Error refreshing library: %s", exc)
             messagebox.showerror(self.t("dialog.error"), self.t("library.refresh_failed", error=exc))
@@ -346,6 +493,28 @@ class LibraryWorkflowMixin:
                 panel_name,
                 self._empty_library_message(controller, panel),
             )
+
+    def _schedule_library_refresh(self, controller: MetadataController, tree) -> None:
+        panel = self._get_library_panel(controller, tree)
+        if not panel:
+            self._refresh_library_tree(controller, tree)
+            return
+        after_id = panel.get("refresh_after_id")
+        if after_id:
+            try:
+                self.root.after_cancel(after_id)
+            except Exception:
+                pass
+        panel["refresh_after_id"] = self.root.after(
+            180,
+            lambda: self._run_scheduled_library_refresh(controller, tree),
+        )
+
+    def _run_scheduled_library_refresh(self, controller: MetadataController, tree) -> None:
+        panel = self._get_library_panel(controller, tree)
+        if panel:
+            panel["refresh_after_id"] = None
+        self._refresh_library_tree(controller, tree)
 
     def _panel_search_query(self, panel: dict[str, object]) -> str:
         return self._library_ui_controller().panel_search_query(panel)

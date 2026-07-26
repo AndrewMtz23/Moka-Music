@@ -58,6 +58,12 @@ class FakeTree:
     def yview_moveto(self, value):
         self.y_position = value
 
+    def selection_set(self, *items):
+        self.selected = items
+
+    def focus(self, item=None):
+        self.focused = item
+
 
 class FakeVar:
     def __init__(self, value=""):
@@ -78,6 +84,43 @@ class FakeLabel:
         self.options.update(kwargs)
 
 
+class FakePreview:
+    def __init__(self):
+        self.cleared = False
+
+    def clear_preview(self):
+        self.cleared = True
+
+
+class FakeRoot:
+    def __init__(self):
+        self.jobs = {}
+        self.cancelled = []
+        self.next_id = 0
+
+    def after(self, _delay, callback):
+        self.next_id += 1
+        after_id = f"after-{self.next_id}"
+        self.jobs[after_id] = callback
+        return after_id
+
+    def after_cancel(self, after_id):
+        self.cancelled.append(after_id)
+        self.jobs.pop(after_id, None)
+
+
+class FakeProgress:
+    def __init__(self, cancelled=False):
+        self.cancelled = cancelled
+        self.closed = False
+
+    def update(self, *_args):
+        return not self.cancelled
+
+    def close(self):
+        self.closed = True
+
+
 class UiLibraryRefreshTests(unittest.TestCase):
     def make_app(self, main_controller=None, incoming_controller=None, main_tree=None, incoming_tree=None):
         app = MokaMusicApp.__new__(MokaMusicApp)
@@ -91,6 +134,14 @@ class UiLibraryRefreshTests(unittest.TestCase):
         app.tree_principal = main_tree or FakeTree()
         app.tree_nueva = incoming_tree or FakeTree()
         app._library_panels = []
+        app.preview = FakePreview()
+        app.root = FakeRoot()
+        app._library_load_token_counter = 1
+        app._library_load_tokens = {}
+        app.recent_folders = []
+        app._setup_main_menu = lambda: None
+        app._save_config = lambda: None
+        app._load_song_preview = lambda _controller, _filename: None
         return app
 
     def make_panel(self, controller, tree, query="", filter_text=None):
@@ -242,6 +293,114 @@ class UiLibraryRefreshTests(unittest.TestCase):
         self.assertEqual(plan[0][3]["title"], "Tema")
         self.assertEqual(plan[0][3]["artist"], "Cantante")
         self.assertEqual(plan[0][3]["album_artist"], "Cantante")
+
+    def test_finish_library_load_adopts_worker_state(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            real_controller = MetadataController()
+            worker_controller = MetadataController()
+            worker_controller.carpeta = temp_dir
+            worker_controller.archivos = ["song.mp3"]
+            worker_controller._metadata_cache = {
+                "song.mp3": TrackInfo(
+                    "song.mp3",
+                    str(Path(temp_dir) / "song.mp3"),
+                    {"title": "Loaded", "artist": "Artist"},
+                    1.0,
+                    None,
+                )
+            }
+            worker_controller._cover_cache = {"song.mp3": True}
+            tree = FakeTree()
+            app = self.make_app(main_controller=real_controller, main_tree=tree)
+            app._library_load_tokens[id(real_controller)] = 1
+            app._library_panels.append(
+                {
+                    "controller": real_controller,
+                    "tree": tree,
+                    "search_var": FakeVar(""),
+                    "filter_var": FakeVar(app.t("filter.all")),
+                    "filter_mode": FilterMode.ALL,
+                    "result_label": FakeLabel(),
+                }
+            )
+
+            app._finish_library_load(
+                {
+                    "token": 1,
+                    "controller": real_controller,
+                    "tree": tree,
+                    "panel_name": "main_library",
+                    "selected_folder": temp_dir,
+                    "load_start": 0.0,
+                    "progress": FakeProgress(),
+                    "worker_controller": worker_controller,
+                    "files": ["song.mp3"],
+                    "error": None,
+                }
+            )
+
+            self.assertEqual(real_controller.archivos, ["song.mp3"])
+            self.assertEqual(real_controller.get_track_info("song.mp3").metadata["title"], "Loaded")
+            self.assertEqual(len(tree.items), 1)
+            self.assertEqual(app.recent_folders[0]["folder"], temp_dir)
+
+    def test_finish_library_load_ignores_cancelled_result(self):
+        real_controller = MetadataController()
+        worker_controller = MetadataController()
+        worker_controller.archivos = ["song.mp3"]
+        app = self.make_app(main_controller=real_controller)
+        app._library_load_tokens[id(real_controller)] = 1
+
+        progress = FakeProgress(cancelled=True)
+        app._finish_library_load(
+            {
+                "token": 1,
+                "controller": real_controller,
+                "tree": app.tree_principal,
+                "panel_name": "main_library",
+                "selected_folder": "music",
+                "load_start": 0.0,
+                "progress": progress,
+                "worker_controller": worker_controller,
+                "files": ["song.mp3"],
+                "error": None,
+            }
+        )
+
+        self.assertEqual(real_controller.archivos, [])
+        self.assertTrue(progress.closed)
+
+    def test_library_load_tokens_are_tracked_per_controller(self):
+        main_controller = MetadataController()
+        incoming_controller = MetadataController()
+        app = self.make_app(main_controller=main_controller, incoming_controller=incoming_controller)
+
+        main_token = app._next_library_load_token(main_controller)
+        incoming_token = app._next_library_load_token(incoming_controller)
+
+        self.assertNotEqual(main_token, incoming_token)
+        self.assertEqual(app._library_load_tokens[id(main_controller)], main_token)
+        self.assertEqual(app._library_load_tokens[id(incoming_controller)], incoming_token)
+
+    def test_schedule_library_refresh_debounces_previous_job(self):
+        controller = MetadataController()
+        tree = FakeTree()
+        app, panel = self.make_panel(controller, tree)
+        calls = []
+        app._refresh_library_tree = lambda refresh_controller, refresh_tree: calls.append((refresh_controller, refresh_tree))
+
+        app._schedule_library_refresh(controller, tree)
+        first_after_id = panel["refresh_after_id"]
+        app._schedule_library_refresh(controller, tree)
+        second_after_id = panel["refresh_after_id"]
+
+        self.assertNotEqual(first_after_id, second_after_id)
+        self.assertEqual(app.root.cancelled, [first_after_id])
+
+        app.root.jobs[second_after_id]()
+
+        self.assertEqual(calls, [(controller, tree)])
+        self.assertIsNone(panel["refresh_after_id"])
 
 
 if __name__ == "__main__":

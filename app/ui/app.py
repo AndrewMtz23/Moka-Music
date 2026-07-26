@@ -1,4 +1,5 @@
 ﻿import logging
+import queue
 from tkinter import ttk
 from typing import Optional
 import tkinter as tk
@@ -93,6 +94,9 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         self.custom_themes: list[dict[str, object]] = []
         self.onboarding_seen = False
         self.fullscreen_enabled = False
+        self._library_load_token_counter = 0
+        self._library_load_tokens: dict[int, int] = {}
+        self._library_load_queue: queue.Queue = queue.Queue()
 
         self._setup_main_menu()
         self._setup_ui()
@@ -192,7 +196,7 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
             on_finish_reorder=self._finish_reorder_drag,
             on_context_menu=self._show_context_menu,
             on_sort=self._sort_files,
-            on_refresh=self._refresh_library_tree,
+            on_refresh=self._schedule_library_refresh,
             on_action=(
                 self._add_single_file
                 if is_main

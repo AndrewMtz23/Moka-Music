@@ -44,6 +44,7 @@ class LibraryPanelBundle:
             "filter_mode": FilterMode.ALL,
             "filter_menu": self.filter_menu,
             "result_label": self.result_label,
+            "refresh_after_id": None,
             "empty_state_frame": self.empty_state_frame,
             "empty_state_label": self.empty_state_label,
             "empty_state_button": self.empty_state_button,
