@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -7,7 +8,6 @@ from ..constants import DEFAULT_METADATA, FileFormats
 from ..i18n import I18n
 from ..services.metadata_editor_service import MetadataEditor
 from ..models import ActionResult, FilterMode, SortMode, TrackInfo
-from ..utils.audio_utils import AudioUtils
 from ..services.backup_service import (
     build_track_backup,
     decode_cover_art,
@@ -16,29 +16,40 @@ from ..services.backup_service import (
 )
 from ..services.library_service import duplicate_filenames, filter_files as filter_library_files
 from ..services.library_service import quality_report, sort_files
-from ..services.audio_quality_service import inspect_audio_quality
+from ..services.library_cache_service import LibraryCache
 from ..services.library_stats_service import build_library_stats
 from ..services.playback_history_service import normalize_history_path
+from ..services.track_scan_service import scan_track
 
 
 class MetadataController:
-    def __init__(self, translator: Optional[Callable[..., str]] = None) -> None:
+    def __init__(
+        self,
+        translator: Optional[Callable[..., str]] = None,
+        library_cache: Optional[LibraryCache] = None,
+    ) -> None:
         self.t = translator or I18n().t
         self.archivos: list[str] = []
         self.carpeta = ""
         self.portada_path: Optional[str] = None
         self._metadata_cache: dict[str, TrackInfo] = {}
         self._cover_cache: dict[str, bool] = {}
+        self._issue_cache: dict[str, list[str]] = {}
+        self._duplicate_cache: set[str] | None = None
+        self._duplicate_cache_signature: tuple[tuple[str, str, str, str], ...] | None = None
         self._sort_mode = SortMode.TRACK_NUMBER
         self._played_paths: set[str] = set()
         self._last_played_by_path: dict[str, str] = {}
+        self._last_load_metrics: dict[str, object] = {}
         self.logger = logging.getLogger(__name__)
         self.metadata_editor = MetadataEditor()
+        self.library_cache = library_cache or LibraryCache()
 
     def set_translator(self, translator: Callable[..., str]) -> None:
         self.t = translator
 
     def cargar_archivos_mp3(self, carpeta: str) -> list[str]:
+        total_start = time.perf_counter()
         path = Path(carpeta)
         if not path.exists():
             raise FileNotFoundError(self.t("file.not_found", path=carpeta))
@@ -47,13 +58,64 @@ class MetadataController:
         self.archivos = []
         self._metadata_cache.clear()
         self._cover_cache.clear()
+        self._invalidate_derived_caches()
+        self._last_load_metrics = {}
 
-        for item in sorted(path.iterdir()):
-            if item.is_file() and item.suffix.lower() in FileFormats.AUDIO:
-                self.archivos.append(item.name)
-                self._precache_metadata(item.name)
+        list_start = time.perf_counter()
+        audio_items = [
+            item
+            for item in sorted(path.iterdir())
+            if item.is_file() and item.suffix.lower() in FileFormats.AUDIO
+        ]
+        list_elapsed = time.perf_counter() - list_start
 
+        scan_start = time.perf_counter()
+        slowest_scans: list[dict[str, object]] = []
+        cache_hits = 0
+        cache_misses = 0
+        for item in audio_items:
+            self.archivos.append(item.name)
+            item_start = time.perf_counter()
+            cache_hit = self._precache_metadata(item.name)
+            if cache_hit:
+                cache_hits += 1
+            else:
+                cache_misses += 1
+            scan_elapsed = time.perf_counter() - item_start
+            slowest_scans.append({"filename": item.name, "seconds": round(scan_elapsed, 4)})
+        scan_elapsed = time.perf_counter() - scan_start
+
+        sort_start = time.perf_counter()
         self._apply_sorting()
+        sort_elapsed = time.perf_counter() - sort_start
+
+        total_elapsed = time.perf_counter() - total_start
+        slowest_scans = sorted(slowest_scans, key=lambda item: item["seconds"], reverse=True)[:5]
+        self._last_load_metrics = {
+            "folder": self.carpeta,
+            "file_count": len(self.archivos),
+            "list_seconds": round(list_elapsed, 4),
+            "scan_seconds": round(scan_elapsed, 4),
+            "sort_seconds": round(sort_elapsed, 4),
+            "total_seconds": round(total_elapsed, 4),
+            "avg_scan_seconds": round(scan_elapsed / len(audio_items), 4) if audio_items else 0.0,
+            "cache_hits": cache_hits,
+            "cache_misses": cache_misses,
+            "slowest_scans": slowest_scans,
+        }
+        self.logger.info(
+            "Library load metrics: folder=%s files=%s list=%.4fs scan=%.4fs sort=%.4fs total=%.4fs avg_scan=%.4fs cache_hits=%s cache_misses=%s slowest=%s",
+            self.carpeta,
+            len(self.archivos),
+            list_elapsed,
+            scan_elapsed,
+            sort_elapsed,
+            total_elapsed,
+            self._last_load_metrics["avg_scan_seconds"],
+            cache_hits,
+            cache_misses,
+            slowest_scans,
+        )
         return self.archivos.copy()
 
     def refresh_library(self) -> list[str]:
@@ -69,40 +131,87 @@ class MetadataController:
         self.portada_path = None
         self._metadata_cache.clear()
         self._cover_cache.clear()
+        self._invalidate_derived_caches()
         self._sort_mode = SortMode.TRACK_NUMBER
+
+    def adopt_loaded_state_from(self, other: "MetadataController") -> None:
+        self.carpeta = other.carpeta
+        self.archivos = other.archivos.copy()
+        self.portada_path = other.portada_path
+        self._metadata_cache = dict(other._metadata_cache)
+        self._cover_cache = dict(other._cover_cache)
+        self._issue_cache = dict(other._issue_cache)
+        self._duplicate_cache = set(other._duplicate_cache) if other._duplicate_cache is not None else None
+        self._duplicate_cache_signature = other._duplicate_cache_signature
+        self._sort_mode = other._sort_mode
+        self._last_load_metrics = dict(other._last_load_metrics)
 
     def register_file(self, filename: str) -> None:
         if filename not in self.archivos:
             self.archivos.append(filename)
         self._precache_metadata(filename)
+        self._invalidate_derived_caches()
         self._apply_sorting()
 
     def remove_file(self, filename: str) -> None:
+        self._invalidate_file_cache(filename)
         if filename in self.archivos:
             self.archivos.remove(filename)
         self._metadata_cache.pop(filename, None)
         self._cover_cache.pop(filename, None)
+        self._invalidate_file_derived_cache(filename)
+        self._invalidate_duplicate_cache()
 
     def rename_file(self, old_name: str, new_name: str) -> None:
+        self._invalidate_file_cache(old_name)
+        self._invalidate_file_cache(new_name)
         if old_name in self.archivos:
             index = self.archivos.index(old_name)
             self.archivos[index] = new_name
         self._metadata_cache.pop(old_name, None)
         self._cover_cache.pop(old_name, None)
-        self._precache_metadata(new_name)
+        self._precache_metadata(new_name, force_rescan=True)
+        self._invalidate_file_derived_cache(old_name)
+        self._invalidate_file_derived_cache(new_name)
+        self._invalidate_duplicate_cache()
         self._apply_sorting()
 
-    def _precache_metadata(self, filename: str) -> None:
+    def _precache_metadata(self, filename: str, *, force_rescan: bool = False) -> bool:
         filepath = os.path.join(self.carpeta, filename)
-        metadata = self._get_file_metadata(filepath)
+        scan = None if force_rescan else self.library_cache.get_valid_track(filepath)
+        cache_hit = scan is not None
+        if scan is None:
+            scan = scan_track(filepath)
+            self.library_cache.save_track(scan)
         self._metadata_cache[filename] = TrackInfo(
             filename=filename,
             filepath=filepath,
-            metadata=metadata,
-            duration=AudioUtils.get_audio_duration(filepath),
+            metadata=scan.metadata,
+            duration=scan.duration,
             cover_art=None,
-            audio_quality=inspect_audio_quality(filepath),
+            audio_quality=scan.audio_quality,
         )
+        if scan.has_cover_art is not None:
+            self._cover_cache[filename] = bool(scan.has_cover_art)
+        self._invalidate_file_derived_cache(filename)
+        return cache_hit
+
+    def _invalidate_file_cache(self, filename: str) -> None:
+        if not self.carpeta or not filename:
+            return
+        self.library_cache.invalidate_path(os.path.join(self.carpeta, filename))
+
+    def _invalidate_file_derived_cache(self, filename: str) -> None:
+        self._issue_cache.pop(filename, None)
+        self._invalidate_duplicate_cache()
+
+    def _invalidate_duplicate_cache(self) -> None:
+        self._duplicate_cache = None
+        self._duplicate_cache_signature = None
+
+    def _invalidate_derived_caches(self) -> None:
+        self._issue_cache.clear()
+        self._invalidate_duplicate_cache()
 
     def _get_file_metadata(self, filepath: str) -> dict[str, str]:
         metadata = self.metadata_editor.obtener_metadatos(filepath)
@@ -149,7 +258,8 @@ class MetadataController:
         )
         if success_count:
             for filename in self.archivos:
-                self._precache_metadata(filename)
+                self._invalidate_file_cache(filename)
+                self._precache_metadata(filename, force_rescan=True)
         return success_count, errors
 
     def crear_respaldo_metadatos(
@@ -218,7 +328,8 @@ class MetadataController:
             if success and cover_success:
                 success_count += 1
                 if filename in self.archivos:
-                    self._precache_metadata(filename)
+                    self._invalidate_file_cache(filename)
+                    self._precache_metadata(filename, force_rescan=True)
             else:
                 errors.extend(file_errors or cover_errors or [filename])
 
@@ -272,7 +383,8 @@ class MetadataController:
                 errors=errors,
             )
 
-        self._precache_metadata(filename)
+        self._invalidate_file_cache(filename)
+        self._precache_metadata(filename, force_rescan=True)
         self._apply_sorting()
         return ActionResult.ok(
             self.t("message.song_metadata_saved"),
@@ -307,7 +419,8 @@ class MetadataController:
         )
         if success_count:
             for filename in selected:
-                self._precache_metadata(filename)
+                self._invalidate_file_cache(filename)
+                self._precache_metadata(filename, force_rescan=True)
             self._apply_sorting()
         return success_count, errors
 
@@ -428,7 +541,8 @@ class MetadataController:
             )
             if success:
                 success_count += 1
-                self._precache_metadata(filename)
+                self._invalidate_file_cache(filename)
+                self._precache_metadata(filename, force_rescan=True)
             else:
                 errors.extend(file_errors or [filename])
 
@@ -470,10 +584,43 @@ class MetadataController:
     def metadata_cache_snapshot(self) -> dict[str, TrackInfo]:
         return dict(self._metadata_cache)
 
+    def load_metrics_snapshot(self) -> dict[str, object]:
+        return dict(self._last_load_metrics)
+
     def duplicate_filenames(self) -> set[str]:
-        return duplicate_filenames(self.archivos, self._metadata_cache)
+        signature = self._duplicate_signature()
+        if self._duplicate_cache is not None and self._duplicate_cache_signature == signature:
+            return set(self._duplicate_cache)
+        duplicates = duplicate_filenames(self.archivos, self._metadata_cache)
+        self._duplicate_cache = set(duplicates)
+        self._duplicate_cache_signature = signature
+        return set(duplicates)
+
+    def _duplicate_signature(self) -> tuple[tuple[str, str, str, str], ...]:
+        signature: list[tuple[str, str, str, str]] = []
+        for filename in self.archivos:
+            cached = self._metadata_cache.get(filename)
+            metadata = cached.metadata if cached else {}
+            signature.append(
+                (
+                    filename,
+                    str(metadata.get("artist", "") or ""),
+                    str(metadata.get("title", "") or ""),
+                    str(metadata.get("track_number", "") or ""),
+                )
+            )
+        return tuple(signature)
 
     def issue_keys_for_file(self, filename: str, duplicate_set: Optional[set[str]] = None) -> list[str]:
+        base_issues = list(self._base_issue_keys_for_file(filename))
+        if filename in (duplicate_set or set()):
+            base_issues.append("duplicate")
+        return base_issues
+
+    def _base_issue_keys_for_file(self, filename: str) -> list[str]:
+        cached_issues = self._issue_cache.get(filename)
+        if cached_issues is not None:
+            return list(cached_issues)
         cached = self.get_track_info(filename)
         metadata = cached.metadata if cached else {}
         issues: list[str] = []
@@ -492,11 +639,10 @@ class MetadataController:
             issues.append("missing_track")
         if not self._has_cover_art(filename):
             issues.append("missing_cover")
-        if filename in (duplicate_set or set()):
-            issues.append("duplicate")
         quality = cached.audio_quality if cached else {}
         if quality.get("low_bitrate"):
             issues.append("low_bitrate")
         if quality.get("possibly_corrupt"):
             issues.append("possibly_corrupt")
-        return issues
+        self._issue_cache[filename] = list(issues)
+        return list(issues)

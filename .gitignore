@@ -3,7 +3,9 @@ __pycache__/
 *.pyo
 *.log
 .pytest_cache/
+docs/
 venv/
 .venv/
 mokamusic_config.json
+mokamusic_library_cache.sqlite
 backups/

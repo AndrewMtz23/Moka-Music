@@ -4,9 +4,12 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from app.controllers.metadata_controller import MetadataController
 from app.models import FilterMode, SortMode, TrackInfo
+from app.services.library_cache_service import LibraryCache
+from app.services.track_scan_service import TrackScanResult
 
 
 class FakeMetadataEditor:
@@ -45,10 +48,71 @@ class ControllerTests(unittest.TestCase):
             (path / "b.wav").write_bytes(b"")
             (path / "notes.txt").write_text("ignore", encoding="utf-8")
 
-            controller = MetadataController()
+            controller = MetadataController(library_cache=LibraryCache(path / "cache.sqlite"))
             files = controller.cargar_archivos_mp3(temp_dir)
 
             self.assertEqual(files, ["a.mp3", "b.wav"])
+            metrics = controller.load_metrics_snapshot()
+            self.assertEqual(metrics["file_count"], 2)
+            self.assertIn("scan_seconds", metrics)
+            self.assertIn("slowest_scans", metrics)
+
+    def test_load_uses_track_scanner_for_precache(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir)
+            (path / "a.mp3").write_bytes(b"")
+
+            def fake_scan(filepath):
+                return TrackScanResult(
+                    filename=Path(filepath).name,
+                    filepath=str(filepath),
+                    metadata={"title": "Scanned", "artist": "Fast"},
+                    duration=42.0,
+                    audio_quality={"bitrate_kbps": 320},
+                    has_cover_art=True,
+                )
+
+            controller = MetadataController(library_cache=LibraryCache(path / "cache.sqlite"))
+            with patch("app.controllers.metadata_controller.scan_track", side_effect=fake_scan):
+                controller.cargar_archivos_mp3(temp_dir)
+
+            cached = controller.get_track_info("a.mp3")
+            self.assertEqual(cached.metadata["title"], "Scanned")
+            self.assertEqual(cached.duration, 42.0)
+            self.assertEqual(cached.audio_quality["bitrate_kbps"], 320)
+            self.assertTrue(controller._cover_cache["a.mp3"])
+
+    def test_load_uses_persistent_cache_on_second_scan(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir)
+            audio = path / "a.mp3"
+            audio.write_bytes(b"audio")
+            cache = LibraryCache(path / "cache.sqlite")
+
+            first_result = TrackScanResult(
+                filename="a.mp3",
+                filepath=str(audio),
+                metadata={"title": "Cached"},
+                duration=9.0,
+                audio_quality={"bitrate_kbps": 256},
+                has_cover_art=False,
+            )
+
+            controller = MetadataController(library_cache=cache)
+            with patch("app.controllers.metadata_controller.scan_track", return_value=first_result) as scanner:
+                controller.cargar_archivos_mp3(temp_dir)
+                self.assertEqual(scanner.call_count, 1)
+
+            second_controller = MetadataController(library_cache=cache)
+            with patch("app.controllers.metadata_controller.scan_track") as scanner:
+                second_controller.cargar_archivos_mp3(temp_dir)
+                scanner.assert_not_called()
+
+            cached = second_controller.get_track_info("a.mp3")
+            metrics = second_controller.load_metrics_snapshot()
+            self.assertEqual(cached.metadata["title"], "Cached")
+            self.assertEqual(metrics["cache_hits"], 1)
+            self.assertEqual(metrics["cache_misses"], 0)
 
     def test_sort_mode_by_filename_keeps_case_insensitive_order(self):
         controller = MetadataController()
@@ -96,6 +160,44 @@ class ControllerTests(unittest.TestCase):
 
         self.assertEqual(controller.filter_files(mode=FilterMode.MISSING_COVER), ["b.mp3", "c.mp3"])
         self.assertEqual(controller.filter_files(mode=FilterMode.DUPLICATES), ["a.mp3", "b.mp3"])
+
+    def test_duplicate_filenames_reuses_cached_result_until_signature_changes(self):
+        controller = MetadataController()
+        controller.archivos = ["a.mp3", "b.mp3"]
+        controller._metadata_cache = {
+            "a.mp3": TrackInfo("a.mp3", "a.mp3", {"title": "Same", "artist": "One"}, 0.0, None),
+            "b.mp3": TrackInfo("b.mp3", "b.mp3", {"title": "Same", "artist": "One"}, 0.0, None),
+        }
+
+        with patch("app.controllers.metadata_controller.duplicate_filenames", return_value={"a.mp3", "b.mp3"}) as duplicates:
+            self.assertEqual(controller.duplicate_filenames(), {"a.mp3", "b.mp3"})
+            self.assertEqual(controller.duplicate_filenames(), {"a.mp3", "b.mp3"})
+            self.assertEqual(duplicates.call_count, 1)
+
+            controller._metadata_cache["b.mp3"].metadata["title"] = "Other"
+            self.assertEqual(controller.duplicate_filenames(), {"a.mp3", "b.mp3"})
+            self.assertEqual(duplicates.call_count, 2)
+
+    def test_issue_keys_cache_base_issues_and_keep_duplicates_dynamic(self):
+        controller = MetadataController()
+        controller.carpeta = "music"
+        controller.archivos = ["song.mp3"]
+        controller._metadata_cache = {
+            "song.mp3": TrackInfo(
+                "song.mp3",
+                "music/song.mp3",
+                {"title": "Song", "artist": "", "album": "", "year": "", "track_number": "0"},
+                0.0,
+                None,
+            )
+        }
+        controller._cover_cache = {"song.mp3": True}
+
+        first = controller.issue_keys_for_file("song.mp3", set())
+        second = controller.issue_keys_for_file("song.mp3", {"song.mp3"})
+
+        self.assertEqual(first, ["missing_artist", "missing_album", "missing_year"])
+        self.assertEqual(second, ["missing_artist", "missing_album", "missing_year", "duplicate"])
 
     def test_backup_includes_cover_art_for_selected_files(self):
         with tempfile.TemporaryDirectory() as temp_dir:
