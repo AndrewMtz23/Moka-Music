@@ -1,6 +1,35 @@
 # MokaMusic
 
-MokaMusic is a desktop app for reviewing, playing, cleaning, organizing, and editing metadata for local music files. It is designed for playlist preparation: you can work with two folders side by side, fix metadata in batches, reorder tracks, rename files, export reports, and keep backups before important changes.
+<p align="center">
+  <img src="assets/logo.png" alt="MokaMusic logo" width="128">
+</p>
+
+<p align="center">
+  <strong>Review, play, clean, organize, and edit local music metadata from a focused desktop app.</strong>
+</p>
+
+<p align="center">
+  <a href="https://www.python.org/"><img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white"></a>
+  <img alt="Platform Windows" src="https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white">
+  <img alt="Tkinter UI" src="https://img.shields.io/badge/ui-Tkinter-2F855A">
+  <img alt="Version 2.2.0" src="https://img.shields.io/badge/version-2.2.0-00A3FF">
+</p>
+
+MokaMusic is a desktop app for playlist preparation and local music library maintenance. Work with two folders side by side, fix metadata in batches, reorder tracks, rename files, export reports, and keep backups before important changes.
+
+## Highlights
+
+- Manage main and incoming music folders side by side.
+- Edit single-track or batch metadata with before/after previews.
+- Prepare playlists by applying track numbers and clean filenames from the visible order.
+- Find missing metadata, duplicate tracks, low bitrate files, missing cover art, and possible corrupt files.
+- Play tracks inside the app with a redesigned bottom player and cover-art preview.
+- Load large libraries faster with unified scanning, cache support, and background loading.
+- Support `.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, `.aac`, `.opus`, and `.wma`.
+
+## Preview
+
+![MokaMusic desktop preview](assets/mokamusic-preview.png)
 
 ## Current Status
 
