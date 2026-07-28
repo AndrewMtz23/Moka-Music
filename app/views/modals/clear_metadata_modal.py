@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Callable, Optional
 
-
 MetadataField = tuple[str, str]
 KEEP_FIELDS_KEY = "__keep_fields"
 
@@ -57,9 +56,7 @@ def request_clear_metadata(
             field: str(current_song.get(field, "") or "").strip() if keep_vars[field].get() else ""
             for field, _label_key in fields
         }
-        result[KEEP_FIELDS_KEY] = "|".join(
-            field for field, _label_key in fields if keep_vars[field].get()
-        )
+        result[KEEP_FIELDS_KEY] = "|".join(field for field, _label_key in fields if keep_vars[field].get())
         modal.destroy()
 
     ttk.Button(button_row, text=translator("metadata_clear.apply"), command=apply_clear).pack(side="left")

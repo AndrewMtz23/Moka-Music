@@ -169,7 +169,9 @@ class ControllerTests(unittest.TestCase):
             "b.mp3": TrackInfo("b.mp3", "b.mp3", {"title": "Same", "artist": "One"}, 0.0, None),
         }
 
-        with patch("app.controllers.metadata_controller.duplicate_filenames", return_value={"a.mp3", "b.mp3"}) as duplicates:
+        with patch(
+            "app.controllers.metadata_controller.duplicate_filenames", return_value={"a.mp3", "b.mp3"}
+        ) as duplicates:
             self.assertEqual(controller.duplicate_filenames(), {"a.mp3", "b.mp3"})
             self.assertEqual(controller.duplicate_filenames(), {"a.mp3", "b.mp3"})
             self.assertEqual(duplicates.call_count, 1)

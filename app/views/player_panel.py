@@ -6,6 +6,7 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 from typing import Callable, Optional
+
 from PIL import Image, ImageDraw, ImageTk
 
 if __name__ == "__main__" and not __package__:
@@ -19,8 +20,8 @@ if __name__ == "__main__" and not __package__:
 from ..controllers.playback_controller import PlaybackController
 from ..i18n import I18n
 from ..services.song_info_service import SongInfo
-from ..utils.audio_utils import AudioUtils
 from ..ui_helpers.widgets import ToolTip
+from ..utils.audio_utils import AudioUtils
 
 
 class PlayerControls(ttk.Frame):
@@ -213,13 +214,19 @@ class PlayerControls(ttk.Frame):
         self.main_frame = ttk.Frame(self, style="Player.TFrame")
         self.main_frame.pack(fill="both", expand=True, padx=(64, 14), pady=10)
 
-        self.shadow_canvas = tk.Canvas(self.main_frame, height=230, borderwidth=0, highlightthickness=0, background=self._player_bg)
+        self.shadow_canvas = tk.Canvas(
+            self.main_frame, height=230, borderwidth=0, highlightthickness=0, background=self._player_bg
+        )
         self.shadow_canvas.pack(fill="both", expand=True)
         self.shadow_canvas.bind("<Configure>", lambda _event: self._draw_player_shell())
 
         self.card_frame = ttk.Frame(self.main_frame, style="PlayerCard.TFrame")
-        self.card_window = self.shadow_canvas.create_window(112, 22, anchor="nw", window=self.card_frame, width=1, height=1)
-        self.vinyl_canvas = tk.Canvas(self.main_frame, width=166, height=166, borderwidth=0, highlightthickness=0, background=self._player_bg)
+        self.card_window = self.shadow_canvas.create_window(
+            112, 22, anchor="nw", window=self.card_frame, width=1, height=1
+        )
+        self.vinyl_canvas = tk.Canvas(
+            self.main_frame, width=166, height=166, borderwidth=0, highlightthickness=0, background=self._player_bg
+        )
         self.vinyl_window = self.shadow_canvas.create_window(0, 16, anchor="nw", window=self.vinyl_canvas)
         self.vinyl_canvas.bind("<Configure>", lambda _event: self._draw_vinyl())
 
@@ -441,16 +448,67 @@ class PlayerControls(ttk.Frame):
         canvas.coords(self.card_window, card_x, card_y)
         canvas.itemconfigure(self.card_window, width=card_w, height=card_h)
         canvas.coords(self.vinyl_window, 0, card_y - 5)
-        self._rounded_rect(canvas, card_x + 7, card_y + 11, card_x + card_w + 2, card_y + card_h + 10, 20, fill=self._player_shadow_deep, outline="", tags="shell")
-        self._rounded_rect(canvas, card_x + 3, card_y + 6, card_x + card_w + 1, card_y + card_h + 5, 20, fill=self._player_shadow_soft, outline="", tags="shell")
-        self._rounded_rect(canvas, card_x, card_y, card_x + card_w, card_y + card_h, 20, fill=self._player_card, outline=self._player_border, tags="shell")
+        self._rounded_rect(
+            canvas,
+            card_x + 7,
+            card_y + 11,
+            card_x + card_w + 2,
+            card_y + card_h + 10,
+            20,
+            fill=self._player_shadow_deep,
+            outline="",
+            tags="shell",
+        )
+        self._rounded_rect(
+            canvas,
+            card_x + 3,
+            card_y + 6,
+            card_x + card_w + 1,
+            card_y + card_h + 5,
+            20,
+            fill=self._player_shadow_soft,
+            outline="",
+            tags="shell",
+        )
+        self._rounded_rect(
+            canvas,
+            card_x,
+            card_y,
+            card_x + card_w,
+            card_y + card_h,
+            20,
+            fill=self._player_card,
+            outline=self._player_border,
+            tags="shell",
+        )
         canvas.tag_lower("shell")
 
     def _rounded_rect(self, canvas, x1, y1, x2, y2, radius, **kwargs) -> None:
         points = [
-            x1 + radius, y1, x2 - radius, y1, x2, y1, x2, y1 + radius,
-            x2, y2 - radius, x2, y2, x2 - radius, y2, x1 + radius, y2,
-            x1, y2, x1, y2 - radius, x1, y1 + radius, x1, y1,
+            x1 + radius,
+            y1,
+            x2 - radius,
+            y1,
+            x2,
+            y1,
+            x2,
+            y1 + radius,
+            x2,
+            y2 - radius,
+            x2,
+            y2,
+            x2 - radius,
+            y2,
+            x1 + radius,
+            y2,
+            x1,
+            y2,
+            x1,
+            y2 - radius,
+            x1,
+            y1 + radius,
+            x1,
+            y1,
         ]
         canvas.create_polygon(points, smooth=True, **kwargs)
 
@@ -477,10 +535,7 @@ class PlayerControls(ttk.Frame):
             (self.mute_button, "player.volume_hint"),
             (self.progress_bar, "player.seek_hint"),
         ]
-        self._tooltips = [
-            ToolTip(widget, lambda key=key: self.t(key))
-            for widget, key in tooltip_targets
-        ]
+        self._tooltips = [ToolTip(widget, lambda key=key: self.t(key)) for widget, key in tooltip_targets]
 
     def _set_transport_enabled(self, enabled: bool) -> None:
         state = ["!disabled"] if enabled and self.playback.available else ["disabled"]
@@ -657,7 +712,9 @@ class PlayerControls(ttk.Frame):
         title = ttk.Label(content, text=self.t("player.volume_hint"), style="PlayerTitle.TLabel")
         title.pack(anchor="w", pady=(0, 10))
 
-        value_label = ttk.Label(content, text=f"{int(float(self.playback.volume or 0.0) * 100)}%", style="PlayerMuted.TLabel")
+        value_label = ttk.Label(
+            content, text=f"{int(float(self.playback.volume or 0.0) * 100)}%", style="PlayerMuted.TLabel"
+        )
         value_label.pack(anchor="e")
 
         volume_var = tk.DoubleVar(value=float(self.playback.volume or 0.0))
@@ -687,8 +744,12 @@ class PlayerControls(ttk.Frame):
 
         actions = ttk.Frame(content, style="PlayerCard.TFrame")
         actions.pack(fill="x")
-        ttk.Button(actions, text=self.t("player.volume_down"), command=lambda: step_volume(-0.1), style="PlayerIcon.TButton").pack(side="left")
-        ttk.Button(actions, text=self.t("player.volume_up"), command=lambda: step_volume(0.1), style="PlayerIcon.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(
+            actions, text=self.t("player.volume_down"), command=lambda: step_volume(-0.1), style="PlayerIcon.TButton"
+        ).pack(side="left")
+        ttk.Button(
+            actions, text=self.t("player.volume_up"), command=lambda: step_volume(0.1), style="PlayerIcon.TButton"
+        ).pack(side="left", padx=(8, 0))
         ttk.Button(actions, text="OK", command=modal.destroy, style="PlayerPrimary.TButton").pack(side="right")
 
         modal.update_idletasks()
@@ -712,7 +773,9 @@ class PlayerControls(ttk.Frame):
         new_state = self.playback.seek_absolute(state.duration * ratio)
         self._sync_time_display(new_state.position)
         if new_state.current_file and not new_state.is_playing:
-            self.artist_label.configure(text=self.t("player.seeked", position=AudioUtils.format_time(new_state.position)))
+            self.artist_label.configure(
+                text=self.t("player.seeked", position=AudioUtils.format_time(new_state.position))
+            )
 
     def _start_progress_loop(self) -> None:
         self._update_progress()
@@ -838,7 +901,11 @@ class PlayerControls(ttk.Frame):
     def _cover_photo_from_file(self, filepath: str | None):
         size = 146
         try:
-            image = self.song_info.get_cover_image(filepath, (size, size)) if filepath else self.song_info._get_default_cover((size, size))
+            image = (
+                self.song_info.get_cover_image(filepath, (size, size))
+                if filepath
+                else self.song_info._get_default_cover((size, size))
+            )
         except Exception:
             image = self.song_info._get_default_cover((size, size))
         image = image.resize((size, size), Image.LANCZOS).convert("RGBA")

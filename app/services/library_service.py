@@ -1,10 +1,9 @@
-from pathlib import Path
-from difflib import SequenceMatcher
 import re
+from difflib import SequenceMatcher
+from pathlib import Path
 from typing import Callable
 
 from app.models import FilterMode, SortMode, TrackInfo
-
 
 MetadataCache = dict[str, TrackInfo]
 
@@ -39,7 +38,9 @@ def sort_files(
     elif mode == SortMode.DATE_ADDED:
         sorted_files.sort(key=mtime_getter)
     elif mode == SortMode.LAST_PLAYED:
-        sorted_files.sort(key=lambda value: (last_played_getter(value) if last_played_getter else "", value.lower()), reverse=True)
+        sorted_files.sort(
+            key=lambda value: (last_played_getter(value) if last_played_getter else "", value.lower()), reverse=True
+        )
     return sorted_files
 
 
@@ -187,12 +188,7 @@ def duplicate_filenames(files: list[str], metadata_cache: MetadataCache) -> set[
         duplicate_key = exact_duplicate_key_for(filename, metadata_for(filename, metadata_cache))
         if duplicate_key:
             groups.setdefault(duplicate_key, []).append(filename)
-    duplicates = {
-        filename
-        for filenames in groups.values()
-        if len(filenames) > 1
-        for filename in filenames
-    }
+    duplicates = {filename for filenames in groups.values() if len(filenames) > 1 for filename in filenames}
     duplicates.update(fuzzy_duplicate_filenames(files, metadata_cache))
     duplicates.update(duplicate_track_number_filenames(files, metadata_cache))
     return duplicates
@@ -210,20 +206,12 @@ def duplicate_track_number_filenames(files: list[str], metadata_cache: MetadataC
         if number < 0:
             continue
         groups.setdefault(number, []).append(filename)
-    return {
-        filename
-        for filenames in groups.values()
-        if len(filenames) > 1
-        for filename in filenames
-    }
+    return {filename for filenames in groups.values() if len(filenames) > 1 for filename in filenames}
 
 
 def fuzzy_duplicate_filenames(files: list[str], metadata_cache: MetadataCache, threshold: float = 0.92) -> set[str]:
     duplicates: set[str] = set()
-    keys = {
-        filename: fuzzy_duplicate_key_for(filename, metadata_for(filename, metadata_cache))
-        for filename in files
-    }
+    keys = {filename: fuzzy_duplicate_key_for(filename, metadata_for(filename, metadata_cache)) for filename in files}
     for index, filename in enumerate(files):
         key = keys.get(filename, "")
         if not key:

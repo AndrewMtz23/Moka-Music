@@ -138,9 +138,11 @@ class MenuControllerTests(unittest.TestCase):
         root = FakeRoot()
         callbacks, _calls = self.callbacks()
 
-        with patch("app.controllers.menu_controller.tk.Menu", FakeMenu), \
-             patch("app.controllers.menu_controller.tk.Frame", FakeFrame), \
-             patch("app.controllers.menu_controller.tk.Menubutton", FakeMenubutton):
+        with (
+            patch("app.controllers.menu_controller.tk.Menu", FakeMenu),
+            patch("app.controllers.menu_controller.tk.Frame", FakeFrame),
+            patch("app.controllers.menu_controller.tk.Menubutton", FakeMenubutton),
+        ):
             MenuController(root, fake_t, callbacks).install()
 
         self.assertEqual(len(root.config_calls), 1)
@@ -260,7 +262,9 @@ class MenuControllerTests(unittest.TestCase):
             menu = MenuController(root, fake_t, callbacks).build()
 
         tools_menu = next(cascade["menu"] for cascade in menu.cascades if cascade["label"] == "menu.tools")
-        organization_cascade = next(cascade for cascade in tools_menu.cascades if cascade["label"] == "menu.organization_tools")
+        organization_cascade = next(
+            cascade for cascade in tools_menu.cascades if cascade["label"] == "menu.organization_tools"
+        )
         labels = [command.get("label") for command in organization_cascade["menu"].commands if "label" in command]
 
         self.assertEqual(

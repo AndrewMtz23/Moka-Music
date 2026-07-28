@@ -8,7 +8,6 @@ from typing import Any
 from ..constants import CONFIG_FILE_NAME
 from ..i18n import normalize_language
 
-
 VALID_THEME_IDS = {
     "light",
     "dark",
@@ -85,8 +84,12 @@ class ConfigController:
             main_folder=str(raw_config.get("main_folder", "") or ""),
             incoming_folder=str(raw_config.get("incoming_folder", "") or ""),
             recent_folders=self._coerce_recent_folders(raw_config.get("recent_folders", [])),
-            cleanup_presets=raw_config.get("cleanup_presets", []) if isinstance(raw_config.get("cleanup_presets", []), list) else [],
-            playback_history=raw_config.get("playback_history", []) if isinstance(raw_config.get("playback_history", []), list) else [],
+            cleanup_presets=raw_config.get("cleanup_presets", [])
+            if isinstance(raw_config.get("cleanup_presets", []), list)
+            else [],
+            playback_history=raw_config.get("playback_history", [])
+            if isinstance(raw_config.get("playback_history", []), list)
+            else [],
         )
 
     def _coerce_volume(self, value) -> float:

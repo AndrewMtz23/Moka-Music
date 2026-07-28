@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import json
 import csv
 import io
+import json
 from datetime import datetime
 from pathlib import Path
-
 
 SUPPORTED_PLAYLIST_EXPORTS = (".m3u", ".m3u8", ".pls", ".json")
 SUPPORTED_LIBRARY_REPORT_EXPORTS = (".json", ".csv")
@@ -70,15 +69,13 @@ def build_json(folder: Path, filenames: list[str], metadata_by_filename: dict[st
                 "position": index,
                 "filename": filename,
                 "path": str((folder / filename).resolve()),
-                "metadata": {
-                    key: value
-                    for key, value in metadata.items()
-                    if key in METADATA_EXPORT_KEYS
-                },
+                "metadata": {key: value for key, value in metadata.items() if key in METADATA_EXPORT_KEYS},
                 "duration": float(metadata.get("duration", 0) or 0),
             }
         )
-    return json.dumps({"folder": str(folder.resolve()), "track_count": len(tracks), "tracks": tracks}, indent=2, ensure_ascii=False)
+    return json.dumps(
+        {"folder": str(folder.resolve()), "track_count": len(tracks), "tracks": tracks}, indent=2, ensure_ascii=False
+    )
 
 
 def export_library_view_json(
@@ -165,11 +162,7 @@ def build_library_view_json(
                 "track_number": metadata.get("track_number", ""),
                 "filename": filename,
                 "path": str((folder / filename).resolve()),
-                "metadata": {
-                    key: value
-                    for key, value in metadata.items()
-                    if key in METADATA_EXPORT_KEYS
-                },
+                "metadata": {key: value for key, value in metadata.items() if key in METADATA_EXPORT_KEYS},
                 "duration": float(duration_by_filename.get(filename, 0.0) or 0.0),
                 "audio_quality": audio_quality_by_filename.get(filename, {}),
             }

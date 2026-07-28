@@ -1,7 +1,7 @@
+import tkinter as tk
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
-import tkinter as tk
 
 RecentFolder = dict[str, str]
 
@@ -91,7 +91,9 @@ class MenuController:
         file_menu.add_cascade(label=self.t("menu.open_recent"), menu=self._build_recent_menu(file_menu))
         file_menu.add_separator()
         file_menu.add_command(label=self.t("menu.export_playlist"), command=self.callbacks.export_playlist)
-        file_menu.add_command(label=self.t("menu.export_library_view_json"), command=self.callbacks.export_library_view_json)
+        file_menu.add_command(
+            label=self.t("menu.export_library_view_json"), command=self.callbacks.export_library_view_json
+        )
         file_menu.add_command(label=self.t("menu.export_selected"), command=self.callbacks.export_selected)
         file_menu.add_command(label=self.t("menu.export_library_report"), command=self.callbacks.export_library_report)
         file_menu.add_command(label=self.t("menu.import_metadata_json"), command=self.callbacks.import_metadata_json)
@@ -118,7 +120,9 @@ class MenuController:
         theme_menu.add_command(label=self.t("menu.import_theme"), command=self.callbacks.import_theme)
         theme_menu.add_command(label=self.t("menu.export_theme"), command=self.callbacks.export_theme)
         theme_menu.add_separator()
-        theme_menu.add_command(label=self.t("menu.fullscreen"), accelerator="F11", command=self.callbacks.toggle_fullscreen)
+        theme_menu.add_command(
+            label=self.t("menu.fullscreen"), accelerator="F11", command=self.callbacks.toggle_fullscreen
+        )
         menubar.add_cascade(label=self.t("menu.theme"), menu=theme_menu)
 
         tools_menu = self._menu(menubar, tearoff=0)
@@ -127,35 +131,57 @@ class MenuController:
         tools_menu.add_command(label=self.t("menu.library_compare"), command=self.callbacks.show_library_comparison)
         tools_menu.add_command(label=self.t("menu.playback_history"), command=self.callbacks.show_playback_history)
         metadata_menu = self._menu(tools_menu, tearoff=0)
-        metadata_menu.add_command(label=self.t("menu.complete_metadata_online"), command=self.callbacks.complete_metadata_online)
+        metadata_menu.add_command(
+            label=self.t("menu.complete_metadata_online"), command=self.callbacks.complete_metadata_online
+        )
         metadata_menu.add_command(label=self.t("menu.find_missing_covers"), command=self.callbacks.find_missing_covers)
         metadata_menu.add_command(label=self.t("menu.normalize_metadata"), command=self.callbacks.normalize_metadata)
-        metadata_menu.add_command(label=self.t("menu.search_replace_metadata"), command=self.callbacks.search_replace_metadata)
+        metadata_menu.add_command(
+            label=self.t("menu.search_replace_metadata"), command=self.callbacks.search_replace_metadata
+        )
         tools_menu.add_cascade(label=self.t("menu.metadata_tools"), menu=metadata_menu)
         audio_menu = self._menu(tools_menu, tearoff=0)
         audio_menu.add_command(label=self.t("menu.analyze_audio_quality"), command=self.callbacks.analyze_audio_quality)
-        audio_menu.add_command(label=self.t("menu.detect_advanced_duplicates"), command=self.callbacks.detect_advanced_duplicates)
+        audio_menu.add_command(
+            label=self.t("menu.detect_advanced_duplicates"), command=self.callbacks.detect_advanced_duplicates
+        )
         audio_menu.add_command(label=self.t("menu.validate_audio_files"), command=self.callbacks.validate_audio_files)
         audio_menu.add_separator()
         audio_menu.add_command(label=self.t("menu.convert_audio"), command=self.callbacks.convert_audio)
         tools_menu.add_cascade(label=self.t("menu.audio_tools"), menu=audio_menu)
         organization_menu = self._menu(tools_menu, tearoff=0)
-        organization_menu.add_command(label=self.t("menu.rename_by_template"), command=self.callbacks.rename_files_by_template)
-        organization_menu.add_command(label=self.t("menu.organize_files"), command=self.callbacks.organize_files_by_folders)
+        organization_menu.add_command(
+            label=self.t("menu.rename_by_template"), command=self.callbacks.rename_files_by_template
+        )
+        organization_menu.add_command(
+            label=self.t("menu.organize_files"), command=self.callbacks.organize_files_by_folders
+        )
         organization_menu.add_separator()
         organization_menu.add_command(label=self.t("menu.validate_playlist"), command=self.callbacks.validate_playlist)
-        organization_menu.add_command(label=self.t("menu.generate_smart_playlist"), command=self.callbacks.generate_smart_playlist)
+        organization_menu.add_command(
+            label=self.t("menu.generate_smart_playlist"), command=self.callbacks.generate_smart_playlist
+        )
         tools_menu.add_cascade(label=self.t("menu.organization_tools"), menu=organization_menu)
         tools_menu.add_command(label=self.t("menu.backup_history"), command=self.callbacks.show_backup_history)
-        tools_menu.add_command(label=self.t("menu.undo_last_metadata"), command=self.callbacks.undo_last_metadata_change)
+        tools_menu.add_command(
+            label=self.t("menu.undo_last_metadata"), command=self.callbacks.undo_last_metadata_change
+        )
         menubar.add_cascade(label=self.t("menu.tools"), menu=tools_menu)
 
         language_menu = self._menu(menubar, tearoff=0)
-        language_menu.add_command(label=self._language_label("menu.language_es", "es"), command=lambda: self.callbacks.change_language("es"))
-        language_menu.add_command(label=self._language_label("menu.language_en", "en"), command=lambda: self.callbacks.change_language("en"))
+        language_menu.add_command(
+            label=self._language_label("menu.language_es", "es"), command=lambda: self.callbacks.change_language("es")
+        )
+        language_menu.add_command(
+            label=self._language_label("menu.language_en", "en"), command=lambda: self.callbacks.change_language("en")
+        )
         language_menu.add_separator()
-        language_menu.add_command(label=self.t("menu.detect_system_language"), command=self.callbacks.detect_system_language)
-        language_menu.add_command(label=self.t("menu.report_missing_translations"), command=self.callbacks.report_missing_translations)
+        language_menu.add_command(
+            label=self.t("menu.detect_system_language"), command=self.callbacks.detect_system_language
+        )
+        language_menu.add_command(
+            label=self.t("menu.report_missing_translations"), command=self.callbacks.report_missing_translations
+        )
         menubar.add_cascade(label=self.t("menu.language"), menu=language_menu)
 
         help_menu = self._menu(menubar, tearoff=0)
@@ -260,7 +286,9 @@ class MenuController:
         file_menu.add_cascade(label=self.t("menu.open_recent"), menu=self._build_recent_menu(file_menu))
         file_menu.add_separator()
         file_menu.add_command(label=self.t("menu.export_playlist"), command=self.callbacks.export_playlist)
-        file_menu.add_command(label=self.t("menu.export_library_view_json"), command=self.callbacks.export_library_view_json)
+        file_menu.add_command(
+            label=self.t("menu.export_library_view_json"), command=self.callbacks.export_library_view_json
+        )
         file_menu.add_command(label=self.t("menu.export_selected"), command=self.callbacks.export_selected)
         file_menu.add_command(label=self.t("menu.export_library_report"), command=self.callbacks.export_library_report)
         file_menu.add_command(label=self.t("menu.import_metadata_json"), command=self.callbacks.import_metadata_json)
@@ -289,7 +317,9 @@ class MenuController:
         theme_menu.add_command(label=self.t("menu.import_theme"), command=self.callbacks.import_theme)
         theme_menu.add_command(label=self.t("menu.export_theme"), command=self.callbacks.export_theme)
         theme_menu.add_separator()
-        theme_menu.add_command(label=self.t("menu.fullscreen"), accelerator="F11", command=self.callbacks.toggle_fullscreen)
+        theme_menu.add_command(
+            label=self.t("menu.fullscreen"), accelerator="F11", command=self.callbacks.toggle_fullscreen
+        )
         return theme_menu
 
     def _build_tools_menu(self, parent) -> tk.Menu:
@@ -299,36 +329,58 @@ class MenuController:
         tools_menu.add_command(label=self.t("menu.library_compare"), command=self.callbacks.show_library_comparison)
         tools_menu.add_command(label=self.t("menu.playback_history"), command=self.callbacks.show_playback_history)
         metadata_menu = self._menu(tools_menu, tearoff=0)
-        metadata_menu.add_command(label=self.t("menu.complete_metadata_online"), command=self.callbacks.complete_metadata_online)
+        metadata_menu.add_command(
+            label=self.t("menu.complete_metadata_online"), command=self.callbacks.complete_metadata_online
+        )
         metadata_menu.add_command(label=self.t("menu.find_missing_covers"), command=self.callbacks.find_missing_covers)
         metadata_menu.add_command(label=self.t("menu.normalize_metadata"), command=self.callbacks.normalize_metadata)
-        metadata_menu.add_command(label=self.t("menu.search_replace_metadata"), command=self.callbacks.search_replace_metadata)
+        metadata_menu.add_command(
+            label=self.t("menu.search_replace_metadata"), command=self.callbacks.search_replace_metadata
+        )
         tools_menu.add_cascade(label=self.t("menu.metadata_tools"), menu=metadata_menu)
         audio_menu = self._menu(tools_menu, tearoff=0)
         audio_menu.add_command(label=self.t("menu.analyze_audio_quality"), command=self.callbacks.analyze_audio_quality)
-        audio_menu.add_command(label=self.t("menu.detect_advanced_duplicates"), command=self.callbacks.detect_advanced_duplicates)
+        audio_menu.add_command(
+            label=self.t("menu.detect_advanced_duplicates"), command=self.callbacks.detect_advanced_duplicates
+        )
         audio_menu.add_command(label=self.t("menu.validate_audio_files"), command=self.callbacks.validate_audio_files)
         audio_menu.add_separator()
         audio_menu.add_command(label=self.t("menu.convert_audio"), command=self.callbacks.convert_audio)
         tools_menu.add_cascade(label=self.t("menu.audio_tools"), menu=audio_menu)
         organization_menu = self._menu(tools_menu, tearoff=0)
-        organization_menu.add_command(label=self.t("menu.rename_by_template"), command=self.callbacks.rename_files_by_template)
-        organization_menu.add_command(label=self.t("menu.organize_files"), command=self.callbacks.organize_files_by_folders)
+        organization_menu.add_command(
+            label=self.t("menu.rename_by_template"), command=self.callbacks.rename_files_by_template
+        )
+        organization_menu.add_command(
+            label=self.t("menu.organize_files"), command=self.callbacks.organize_files_by_folders
+        )
         organization_menu.add_separator()
         organization_menu.add_command(label=self.t("menu.validate_playlist"), command=self.callbacks.validate_playlist)
-        organization_menu.add_command(label=self.t("menu.generate_smart_playlist"), command=self.callbacks.generate_smart_playlist)
+        organization_menu.add_command(
+            label=self.t("menu.generate_smart_playlist"), command=self.callbacks.generate_smart_playlist
+        )
         tools_menu.add_cascade(label=self.t("menu.organization_tools"), menu=organization_menu)
         tools_menu.add_command(label=self.t("menu.backup_history"), command=self.callbacks.show_backup_history)
-        tools_menu.add_command(label=self.t("menu.undo_last_metadata"), command=self.callbacks.undo_last_metadata_change)
+        tools_menu.add_command(
+            label=self.t("menu.undo_last_metadata"), command=self.callbacks.undo_last_metadata_change
+        )
         return tools_menu
 
     def _build_language_menu(self, parent) -> tk.Menu:
         language_menu = self._menu(parent, tearoff=0)
-        language_menu.add_command(label=self._language_label("menu.language_es", "es"), command=lambda: self.callbacks.change_language("es"))
-        language_menu.add_command(label=self._language_label("menu.language_en", "en"), command=lambda: self.callbacks.change_language("en"))
+        language_menu.add_command(
+            label=self._language_label("menu.language_es", "es"), command=lambda: self.callbacks.change_language("es")
+        )
+        language_menu.add_command(
+            label=self._language_label("menu.language_en", "en"), command=lambda: self.callbacks.change_language("en")
+        )
         language_menu.add_separator()
-        language_menu.add_command(label=self.t("menu.detect_system_language"), command=self.callbacks.detect_system_language)
-        language_menu.add_command(label=self.t("menu.report_missing_translations"), command=self.callbacks.report_missing_translations)
+        language_menu.add_command(
+            label=self.t("menu.detect_system_language"), command=self.callbacks.detect_system_language
+        )
+        language_menu.add_command(
+            label=self.t("menu.report_missing_translations"), command=self.callbacks.report_missing_translations
+        )
         return language_menu
 
     def _build_help_menu(self, parent) -> tk.Menu:

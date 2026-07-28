@@ -11,7 +11,6 @@ from typing import Iterator
 from ..constants import LIBRARY_CACHE_FILE_NAME
 from .track_scan_service import TrackScanResult
 
-
 SCANNER_VERSION = 1
 logger = logging.getLogger(__name__)
 
@@ -135,9 +134,7 @@ class LibraryCache:
                 )
                 """
             )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS idx_track_cache_folder ON track_cache(folder)"
-            )
+            connection.execute("CREATE INDEX IF NOT EXISTS idx_track_cache_folder ON track_cache(folder)")
         self._initialized = True
 
     @contextmanager

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from tkinter import messagebox, simpledialog
+from typing import TYPE_CHECKING, Optional
 
 from ..controllers.backup_controller import BackupController
 from ..controllers.cleanup_controller import CleanupController
@@ -10,14 +11,6 @@ from ..controllers.cleanup_preset_controller import CleanupPresetController
 from ..models import SortMode
 from ..services.audio_audit_service import build_audio_quality_rows, detect_advanced_duplicates, validate_audio_files
 from ..services.audio_conversion_service import build_conversion_items, convert_audio_files
-from ..utils.ui_formatting import metadata_label_key
-from ..services.metadata_import_service import filter_import_items_for_library, load_metadata_import_items
-from ..services.metadata_tools_service import (
-    build_normalize_plan,
-    build_search_replace_plan,
-    tool_plan_groups,
-    tool_plan_preview,
-)
 from ..services.file_organization_service import (
     DEFAULT_ORGANIZE_TEMPLATE,
     DEFAULT_RENAME_TEMPLATE,
@@ -27,20 +20,32 @@ from ..services.file_organization_service import (
     validate_playlist,
 )
 from ..services.file_service import sanitize_filename
+from ..services.metadata_import_service import filter_import_items_for_library, load_metadata_import_items
+from ..services.metadata_tools_service import (
+    build_normalize_plan,
+    build_search_replace_plan,
+    tool_plan_groups,
+    tool_plan_preview,
+)
 from ..services.playlist_export_service import export_library_report, export_library_view_json, export_playlist
+from ..utils.ui_formatting import metadata_label_key
+from ..views.modals.audio_audit_modal import show_audio_audit_modal
+from ..views.modals.audio_conversion_modal import request_audio_conversion_options
 from ..views.modals.backup_history_modal import show_backup_history_modal
 from ..views.modals.change_preview_modal import confirm_change_preview
 from ..views.modals.cleanup_preset_modal import show_cleanup_preset_modal
 from ..views.modals.clear_metadata_modal import KEEP_FIELDS_KEY
-from ..views.modals.audio_audit_modal import show_audio_audit_modal
-from ..views.modals.audio_conversion_modal import request_audio_conversion_options
 from ..views.modals.file_plan_preview_modal import confirm_file_plan_preview, show_playlist_validation_modal
-from ..views.modals.online_metadata_modal import request_online_metadata_selection
 from ..views.modals.metadata_import_preview_modal import confirm_metadata_import
+from ..views.modals.online_metadata_modal import request_online_metadata_selection
 from ..views.modals.playlist_insert_preview_modal import request_playlist_insert_preview
-from ..views.modals.track_position_modal import request_track_position
 from ..views.modals.rename_metadata_modal import confirm_rename_metadata
 from ..views.modals.search_replace_metadata_modal import request_search_replace_metadata
+from ..views.modals.track_position_modal import request_track_position
+
+if TYPE_CHECKING:
+    from ..controllers.metadata_controller import MetadataController
+    from ..controllers.rename_controller import RenamePlanItem
 
 
 class MetadataWorkflowMixin:
@@ -179,7 +184,6 @@ class MetadataWorkflowMixin:
 
     def _apply_auto_cover_from_folder(self) -> None:
         targets = self._cover_targets()
-        target_count = sum(len(filenames) for _controller, _tree, filenames in targets)
         if not targets:
             messagebox.showwarning(self.t("dialog.selection"), self.t("message.no_cover_target"))
             return
@@ -198,8 +202,7 @@ class MetadataWorkflowMixin:
             return
 
         backup_groups = [
-            (controller, tree, filenames)
-            for controller, tree, filenames, _cover_path in cover_plan.groups
+            (controller, tree, filenames) for controller, tree, filenames, _cover_path in cover_plan.groups
         ]
         if not self._create_metadata_backup_for_groups(backup_groups, {"__cover__": "auto"}):
             return
@@ -462,7 +465,9 @@ class MetadataWorkflowMixin:
             self._refresh_changed_library_pairs(groups, apply_result.changed_pairs)
             messagebox.showinfo(self.t("dialog.done"), self.t(done_key))
         else:
-            detail = "\n".join(apply_result.result.errors) if apply_result.result.errors else apply_result.result.message
+            detail = (
+                "\n".join(apply_result.result.errors) if apply_result.result.errors else apply_result.result.message
+            )
             messagebox.showerror(self.t("dialog.error"), detail)
 
     def _selected_filenames_by_controller(self) -> list[tuple[MetadataController, object, list[str]]]:
@@ -568,7 +573,12 @@ class MetadataWorkflowMixin:
         )
         if not template:
             return
-        self._apply_file_plan(controller, tree, build_template_plan(controller, filenames, template), self.t("file_organization.rename_title"))
+        self._apply_file_plan(
+            controller,
+            tree,
+            build_template_plan(controller, filenames, template),
+            self.t("file_organization.rename_title"),
+        )
 
     def _organize_files_by_folders(self) -> None:
         target = self._active_playlist_target()
@@ -585,7 +595,12 @@ class MetadataWorkflowMixin:
         )
         if not template:
             return
-        self._apply_file_plan(controller, tree, build_template_plan(controller, filenames, template), self.t("file_organization.organize_title"))
+        self._apply_file_plan(
+            controller,
+            tree,
+            build_template_plan(controller, filenames, template),
+            self.t("file_organization.organize_title"),
+        )
 
     def _apply_file_plan(self, controller, tree, plan, title: str) -> None:
         if not plan:
@@ -654,7 +669,9 @@ class MetadataWorkflowMixin:
         )
         if not output_path:
             return
-        metadata_by_filename, _quality_by_filename, duration_by_filename = self._export_metadata_maps(controller, filenames)
+        metadata_by_filename, _quality_by_filename, duration_by_filename = self._export_metadata_maps(
+            controller, filenames
+        )
         for filename, duration in duration_by_filename.items():
             metadata_by_filename.setdefault(filename, {})["duration"] = str(duration)
         try:
@@ -892,7 +909,6 @@ class MetadataWorkflowMixin:
             self._show_toast(self.t("redo.done", action=action.label), kind="info")
         else:
             self.undo_controller.push_redo(action)
-
 
     def _cleanup_action_options(self) -> list[tuple[str, str]]:
         return self._cleanup_controller().action_options()
@@ -1260,7 +1276,9 @@ class MetadataWorkflowMixin:
                 self._show_toast(self.t("toast.done"), kind="success")
             messagebox.showinfo(self.t("dialog.done"), message)
             return
-        messagebox.showerror(self.t("dialog.error"), "\n".join(errors) if errors else self.t("message.could_not_apply_metadata"))
+        messagebox.showerror(
+            self.t("dialog.error"), "\n".join(errors) if errors else self.t("message.could_not_apply_metadata")
+        )
 
     def _groups_from_metadata_tool_plan(
         self,
@@ -1620,13 +1638,10 @@ class MetadataWorkflowMixin:
         output_path = self.file_handler.seleccionar_destino_playlist(initial_name=initial_name)
         if not output_path:
             return
-        metadata_by_filename = {}
-        for filename in filenames:
-            cached = controller.get_track_info(filename)
-            metadata = dict(cached.metadata) if cached else {}
-            if cached:
-                metadata["duration"] = str(cached.duration or 0)
-            metadata_by_filename[filename] = metadata
+        metadata_by_filename, audio_quality_by_filename, duration_by_filename = self._export_metadata_maps(
+            controller,
+            filenames,
+        )
         try:
             if Path(output_path).suffix.lower() == ".json":
                 path = export_library_view_json(
@@ -1634,11 +1649,10 @@ class MetadataWorkflowMixin:
                     output_path=output_path,
                     filenames=filenames,
                     metadata_by_filename=metadata_by_filename,
-                    audio_quality_by_filename=_quality_by_filename,
+                    audio_quality_by_filename=audio_quality_by_filename,
                     duration_by_filename=duration_by_filename,
                     library_position_by_filename={
-                        filename: index
-                        for index, filename in enumerate(controller.archivos, start=1)
+                        filename: index for index, filename in enumerate(controller.archivos, start=1)
                     },
                     filter_info={"label": self.t("dialog.selection"), "mode": "SELECTION", "search": ""},
                 )
@@ -1689,10 +1703,7 @@ class MetadataWorkflowMixin:
             "mode": getattr(panel.get("filter_mode"), "name", "ALL") if panel else "ALL",
             "search": self._panel_search_query(panel) if panel else "",
         }
-        library_position_by_filename = {
-            filename: index
-            for index, filename in enumerate(controller.archivos, start=1)
-        }
+        library_position_by_filename = {filename: index for index, filename in enumerate(controller.archivos, start=1)}
 
         try:
             path = export_library_view_json(
@@ -1732,7 +1743,9 @@ class MetadataWorkflowMixin:
         if not output_path:
             return
 
-        metadata_by_filename, _quality_by_filename, duration_by_filename = self._export_metadata_maps(controller, filenames)
+        metadata_by_filename, _quality_by_filename, duration_by_filename = self._export_metadata_maps(
+            controller, filenames
+        )
         for filename, duration in duration_by_filename.items():
             metadata_by_filename.setdefault(filename, {})["duration"] = str(duration)
 
@@ -1768,12 +1781,13 @@ class MetadataWorkflowMixin:
         if not output_path:
             return
 
-        metadata_by_filename, audio_quality_by_filename, duration_by_filename = self._export_metadata_maps(controller, filenames)
+        metadata_by_filename, audio_quality_by_filename, duration_by_filename = self._export_metadata_maps(
+            controller, filenames
+        )
         library_position_by_filename = {filename: index for index, filename in enumerate(controller.archivos, start=1)}
         duplicate_set = controller.duplicate_filenames()
         issues_by_filename = {
-            filename: controller.issue_keys_for_file(filename, duplicate_set)
-            for filename in filenames
+            filename: controller.issue_keys_for_file(filename, duplicate_set) for filename in filenames
         }
 
         try:
@@ -1846,11 +1860,7 @@ class MetadataWorkflowMixin:
         success_count = 0
         errors: list[str] = []
         for item in import_items:
-            metadata = {
-                field: value
-                for field, value in item.metadata.items()
-                if field in selected_fields
-            }
+            metadata = {field: value for field, value in item.metadata.items() if field in selected_fields}
             if not metadata:
                 continue
             result = controller.aplicar_cambios_a_archivo(item.filename, metadata)
@@ -1864,7 +1874,9 @@ class MetadataWorkflowMixin:
         if errors:
             messagebox.showwarning(
                 self.t("dialog.error"),
-                self.t("metadata_import.partial", count=success_count, errors=len(errors)) + "\n\n" + "\n".join(errors[:5]),
+                self.t("metadata_import.partial", count=success_count, errors=len(errors))
+                + "\n\n"
+                + "\n".join(errors[:5]),
             )
             self._show_toast(self.t("toast.partial"), kind="warning")
             return
@@ -1942,4 +1954,3 @@ class MetadataWorkflowMixin:
             if key in changed_pairs and key not in refreshed:
                 self._refresh_library_tree(item.controller, item.tree)
                 refreshed.add(key)
-

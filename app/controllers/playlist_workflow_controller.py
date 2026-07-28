@@ -3,10 +3,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-from .rename_controller import RenameController
 from ..models import ActionResult
 from ..services.playlist_order_service import insert_at_position, renumber_order
-
+from .rename_controller import RenameController
 
 ProgressCallback = Callable[[int, int, str], bool]
 
@@ -62,10 +61,7 @@ class PlaylistWorkflowController:
 
     def build_plan_from_order(self, *, controller, tree, final_order: list[str]) -> PlaylistWorkflowPlan:
         original_order = list(controller.archivos)
-        original_positions = {
-            filename: index
-            for index, filename in enumerate(original_order, start=1)
-        }
+        original_positions = {filename: index for index, filename in enumerate(original_order, start=1)}
         track_numbers = renumber_order(final_order, start=0)
         used_names: set[str] = set()
         items: list[PlaylistPlanItem] = []
@@ -152,10 +148,7 @@ class PlaylistWorkflowController:
             total_steps=total_steps,
         )
 
-        final_names = [
-            item.new_name if item.new_name else item.old_name
-            for item in plan.items
-        ]
+        final_names = [item.new_name if item.new_name else item.old_name for item in plan.items]
         try:
             plan.controller.reorder_files(final_names)
         except Exception as exc:

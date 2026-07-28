@@ -6,7 +6,6 @@ from typing import Callable, Optional
 
 from ..constants import DEFAULT_METADATA, FileFormats
 from ..i18n import I18n
-from ..services.metadata_editor_service import MetadataEditor
 from ..models import ActionResult, FilterMode, SortMode, TrackInfo
 from ..services.backup_service import (
     build_track_backup,
@@ -14,10 +13,11 @@ from ..services.backup_service import (
     read_backup_payload,
     write_metadata_backup,
 )
-from ..services.library_service import duplicate_filenames, filter_files as filter_library_files
-from ..services.library_service import quality_report, sort_files
 from ..services.library_cache_service import LibraryCache
+from ..services.library_service import duplicate_filenames, quality_report, sort_files
+from ..services.library_service import filter_files as filter_library_files
 from ..services.library_stats_service import build_library_stats
+from ..services.metadata_editor_service import MetadataEditor
 from ..services.playback_history_service import normalize_history_path
 from ..services.track_scan_service import scan_track
 
@@ -63,9 +63,7 @@ class MetadataController:
 
         list_start = time.perf_counter()
         audio_items = [
-            item
-            for item in sorted(path.iterdir())
-            if item.is_file() and item.suffix.lower() in FileFormats.AUDIO
+            item for item in sorted(path.iterdir()) if item.is_file() and item.suffix.lower() in FileFormats.AUDIO
         ]
         list_elapsed = time.perf_counter() - list_start
 

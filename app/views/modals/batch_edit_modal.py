@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Callable, Optional
 
-
 MetadataField = tuple[str, str]
 
 
@@ -50,13 +49,11 @@ def request_batch_metadata(
 
     def save_batch() -> None:
         nonlocal result
-        metadata = {
-            field: value_vars[field].get().strip()
-            for field, _label_key in fields
-            if apply_vars[field].get()
-        }
+        metadata = {field: value_vars[field].get().strip() for field, _label_key in fields if apply_vars[field].get()}
         if not metadata:
-            messagebox.showwarning(translator("dialog.metadata"), translator("message.no_metadata_to_apply"), parent=modal)
+            messagebox.showwarning(
+                translator("dialog.metadata"), translator("message.no_metadata_to_apply"), parent=modal
+            )
             return
         result = metadata
         modal.destroy()

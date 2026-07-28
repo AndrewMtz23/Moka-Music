@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 from ..constants import FileFormats
 
@@ -29,7 +29,9 @@ def build_audio_quality_rows(groups: list[tuple[object, object, list[str]]]) -> 
     return rows
 
 
-def detect_advanced_duplicates(groups: list[tuple[object, object, list[str]]], *, duration_tolerance: float = 2.0) -> list[dict[str, object]]:
+def detect_advanced_duplicates(
+    groups: list[tuple[object, object, list[str]]], *, duration_tolerance: float = 2.0
+) -> list[dict[str, object]]:
     candidates: list[dict[str, object]] = []
     for controller, _tree, filenames in groups:
         for filename in filenames:

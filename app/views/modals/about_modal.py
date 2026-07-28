@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import webbrowser
 import tkinter as tk
+import webbrowser
 from tkinter import ttk
 from typing import Callable
-
 
 GITHUB_URL = "https://github.com/AndrewMtz23/Moka-Music"
 

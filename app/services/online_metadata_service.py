@@ -7,7 +7,6 @@ from typing import Any
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-
 MUSICBRAINZ_SEARCH_URL = "https://musicbrainz.org/ws/2/recording/"
 USER_AGENT = "MokaMusic/2.1.0 (local metadata editor)"
 
@@ -120,7 +119,9 @@ def _year_from_date(value: str) -> str:
 
 
 def _first_tag_name(tags) -> str:
-    for tag in sorted((tag for tag in tags or [] if isinstance(tag, dict)), key=lambda item: item.get("count", 0), reverse=True):
+    for tag in sorted(
+        (tag for tag in tags or [] if isinstance(tag, dict)), key=lambda item: item.get("count", 0), reverse=True
+    ):
         name = str(tag.get("name", "") or "").strip()
         if name:
             return name

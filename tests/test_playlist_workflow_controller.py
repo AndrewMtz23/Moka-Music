@@ -18,10 +18,7 @@ class FakeController:
     def __init__(self, folder, files, metadata):
         self.carpeta = str(folder)
         self.archivos = list(files)
-        self.metadata = {
-            filename: dict(values)
-            for filename, values in metadata.items()
-        }
+        self.metadata = {filename: dict(values) for filename, values in metadata.items()}
         self.backups = []
 
     def get_track_info(self, filename):
@@ -77,7 +74,10 @@ class PlaylistWorkflowControllerTests(unittest.TestCase):
             self.assertEqual(plan.original_order, ["a.mp3", "b.mp3", "c.mp3"])
             self.assertEqual(plan.final_order, ["c.mp3", "a.mp3", "b.mp3"])
             self.assertEqual(
-                [(item.old_name, item.old_position, item.new_position, item.track_number, item.new_name) for item in plan.items],
+                [
+                    (item.old_name, item.old_position, item.new_position, item.track_number, item.new_name)
+                    for item in plan.items
+                ],
                 [
                     ("c.mp3", 3, 1, 0, "000 - C - Three.mp3"),
                     ("a.mp3", 1, 2, 1, "001 - A - One.mp3"),

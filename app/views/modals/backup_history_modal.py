@@ -1,8 +1,7 @@
-from pathlib import Path
 import tkinter as tk
+from pathlib import Path
 from tkinter import messagebox, ttk
 from typing import Callable
-
 
 BackupRecord = dict[str, object]
 

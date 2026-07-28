@@ -28,8 +28,12 @@ def show_library_compare_modal(parent, translator: Callable[..., str], compariso
         ("library_compare.duplicates", comparison.get("duplicates", 0)),
     ]
     for column, (label_key, value) in enumerate(values):
-        ttk.Label(summary, text=translator(label_key), style="Muted.TLabel").grid(row=0, column=column, sticky="w", padx=8, pady=(8, 2))
-        ttk.Label(summary, text=str(value), style="Title.TLabel").grid(row=1, column=column, sticky="w", padx=8, pady=(0, 8))
+        ttk.Label(summary, text=translator(label_key), style="Muted.TLabel").grid(
+            row=0, column=column, sticky="w", padx=8, pady=(8, 2)
+        )
+        ttk.Label(summary, text=str(value), style="Title.TLabel").grid(
+            row=1, column=column, sticky="w", padx=8, pady=(0, 8)
+        )
 
     table_frame = ttk.Frame(container)
     table_frame.grid(row=1, column=0, sticky="nsew")
@@ -77,4 +81,6 @@ def show_library_compare_modal(parent, translator: Callable[..., str], compariso
 
     button_row = ttk.Frame(container)
     button_row.grid(row=2, column=0, sticky="ew", pady=(12, 0))
-    ttk.Button(button_row, text=translator("metadata_edit.cancel"), command=modal.destroy, style="Secondary.TButton").pack(side="right")
+    ttk.Button(
+        button_row, text=translator("metadata_edit.cancel"), command=modal.destroy, style="Secondary.TButton"
+    ).pack(side="right")

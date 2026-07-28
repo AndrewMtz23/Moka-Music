@@ -4,7 +4,6 @@ from typing import Any, Callable
 
 from ..utils.text_cleanup import build_quick_cleanup_metadata
 
-
 CleanupSelection = tuple[Any, object, list[str]]
 CleanupPlanItem = tuple[Any, object, str, dict[str, str]]
 ProgressCallback = Callable[[int, int, str], bool]
@@ -44,11 +43,7 @@ class CleanupController:
             if not isinstance(preset, dict):
                 continue
             name = str(preset.get("name", "") or "").strip()
-            actions = [
-                str(action)
-                for action in preset.get("actions", [])
-                if str(action) in allowed_actions
-            ]
+            actions = [str(action) for action in preset.get("actions", []) if str(action) in allowed_actions]
             if name and actions:
                 presets.append({"name": name, "actions": actions})
         return presets
@@ -85,10 +80,7 @@ class CleanupController:
         if preset_name:
             return preset_name
         action_names = dict(self.action_options())
-        return " + ".join(
-            translator(action_names.get(action, "quick_actions.title"))
-            for action in actions
-        )
+        return " + ".join(translator(action_names.get(action, "quick_actions.title")) for action in actions)
 
     def backup_metadata(self, actions: list[str], action_label: str, preset_name: str) -> dict[str, object]:
         if len(actions) == 1:
@@ -165,9 +157,7 @@ class CleanupController:
         cached = controller.get_track_info(filename)
         if cached:
             return dict(cached.metadata)
-        return controller.metadata_editor.obtener_metadatos(
-            os.path.join(controller.carpeta, filename)
-        ) or {}
+        return controller.metadata_editor.obtener_metadatos(os.path.join(controller.carpeta, filename)) or {}
 
     def _invalidate_song(self, controller, filename: str) -> None:
         if self.song_info and controller.carpeta:

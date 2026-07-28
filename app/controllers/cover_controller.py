@@ -4,7 +4,6 @@ from typing import Callable, Optional
 
 from ..services.cover_service import find_folder_cover, replace_folder_cover
 
-
 ProgressCallback = Callable[[int, int, str], bool]
 
 

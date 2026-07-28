@@ -1,11 +1,11 @@
 import unittest
 
-from app.ui.theme import THEME_PRESETS
 from app.i18n import I18n
+from app.ui.theme import THEME_PRESETS
 from app.views.modals.theme_settings_modal import (
     THEME_CHOICES,
-    THEME_SETTINGS_MODAL_GEOMETRY,
     THEME_SETTINGS_FULLSCREEN_SHORTCUT,
+    THEME_SETTINGS_MODAL_GEOMETRY,
     THEME_SETTINGS_MODAL_MIN_SIZE,
     density_label,
     font_scale_label,

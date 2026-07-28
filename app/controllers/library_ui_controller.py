@@ -4,7 +4,6 @@ from typing import Callable, Optional
 from ..models import FilterMode, SortMode
 from ..ui_helpers.widgets import LibraryListbox
 
-
 QUALITY_BADGE_FILTERS = {
     FilterMode.LOW_BITRATE,
     FilterMode.BITRATE_128,
@@ -185,17 +184,11 @@ class LibraryUiController:
         return f"{bitrate} kbps" if bitrate > 0 else ""
 
     def count_file_rows(self, tree) -> int:
-        return sum(
-            1
-            for item_id in tree.get_children()
-            if self.filename_from_item(tree.item(item_id))
-        )
+        return sum(1 for item_id in tree.get_children() if self.filename_from_item(tree.item(item_id)))
 
     def visible_filenames(self, tree) -> list[str]:
         return [
-            filename
-            for item_id in tree.get_children()
-            if (filename := self.filename_from_item(tree.item(item_id)))
+            filename for item_id in tree.get_children() if (filename := self.filename_from_item(tree.item(item_id)))
         ]
 
     def panel_search_query(self, panel: dict[str, object]) -> str:

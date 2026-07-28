@@ -46,4 +46,6 @@ def show_audio_audit_modal(
 
     button_row = ttk.Frame(container)
     button_row.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(12, 0))
-    ttk.Button(button_row, text=translator("audio_tools.close"), command=modal.destroy, style="Secondary.TButton").pack(side="right")
+    ttk.Button(button_row, text=translator("audio_tools.close"), command=modal.destroy, style="Secondary.TButton").pack(
+        side="right"
+    )

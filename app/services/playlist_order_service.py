@@ -43,7 +43,4 @@ def renumber_order(order: Iterable[str], start: int = 1) -> dict[str, int]:
         first_number = int(start)
     except (TypeError, ValueError):
         first_number = 0
-    return {
-        filename: index
-        for index, filename in enumerate(order, start=max(0, first_number))
-    }
+    return {filename: index for index, filename in enumerate(order, start=max(0, first_number))}

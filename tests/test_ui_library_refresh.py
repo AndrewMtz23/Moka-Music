@@ -387,7 +387,9 @@ class UiLibraryRefreshTests(unittest.TestCase):
         tree = FakeTree()
         app, panel = self.make_panel(controller, tree)
         calls = []
-        app._refresh_library_tree = lambda refresh_controller, refresh_tree: calls.append((refresh_controller, refresh_tree))
+        app._refresh_library_tree = lambda refresh_controller, refresh_tree: calls.append(
+            (refresh_controller, refresh_tree)
+        )
 
         app._schedule_library_refresh(controller, tree)
         first_after_id = panel["refresh_after_id"]

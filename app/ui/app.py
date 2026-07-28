@@ -1,8 +1,8 @@
-﻿import logging
+import logging
 import queue
+import tkinter as tk
 from tkinter import ttk
 from typing import Optional
-import tkinter as tk
 
 from tkinterdnd2 import DND_FILES, TkinterDnD
 
@@ -13,29 +13,29 @@ from ..controllers.config_controller import ConfigController
 from ..controllers.cover_controller import CoverController
 from ..controllers.drop_controller import DropController
 from ..controllers.library_ui_controller import LibraryUiController
-from ..controllers.metadata_apply_controller import MetadataApplyController
-from ..controllers.metadata_dialog_controller import MetadataDialogController
 from ..controllers.menu_controller import MenuController
+from ..controllers.metadata_apply_controller import MetadataApplyController
 from ..controllers.metadata_controller import MetadataController
+from ..controllers.metadata_dialog_controller import MetadataDialogController
 from ..controllers.playback_selection_controller import PlaybackSelectionController
 from ..controllers.rename_controller import RenameController
 from ..controllers.selection_controller import SelectionController
+from ..controllers.song_actions_controller import SongActions
 from ..controllers.ui_text_controller import UiTextController
 from ..controllers.undo_controller import UndoController
 from ..i18n import I18n
-from ..views.player_panel import PlayerControls
-from ..views.preview_panel import PreviewPanel
-from ..controllers.song_actions_controller import SongActions
-from ..services.song_info_service import SongInfo
 from ..services.online_metadata_service import MusicBrainzClient
+from ..services.song_info_service import SongInfo
 from ..ui_helpers.file_dialogs import FileHandler
-from .theme import StyleManager
 from ..views.library_panel import build_library_panel
 from ..views.metadata_panel import build_metadata_panel
+from ..views.player_panel import PlayerControls
+from ..views.preview_panel import PreviewPanel
 from .app_lifecycle import AppLifecycleMixin
 from .interaction_workflow import InteractionWorkflowMixin
 from .library_workflow import LibraryWorkflowMixin
 from .metadata_workflow import MetadataWorkflowMixin
+from .theme import StyleManager
 
 
 class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixin, InteractionWorkflowMixin):
@@ -197,11 +197,7 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
             on_context_menu=self._show_context_menu,
             on_sort=self._sort_files,
             on_refresh=self._schedule_library_refresh,
-            on_action=(
-                self._add_single_file
-                if is_main
-                else lambda _controller, _tree: self._move_to_main()
-            ),
+            on_action=(self._add_single_file if is_main else lambda _controller, _tree: self._move_to_main()),
             on_clear_folder=self._clear_library_folder,
             on_refresh_folder=self._refresh_library_folder,
             on_delete_selected=self._delete_selected_from_library,
@@ -288,11 +284,14 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
                     continue
                 try:
                     widget.drop_target_register(DND_FILES)
-                    widget.dnd_bind("<<Drop>>", lambda event, c=controller, t=tree: self._handle_library_drop(event, c, t))
+                    widget.dnd_bind(
+                        "<<Drop>>", lambda event, c=controller, t=tree: self._handle_library_drop(event, c, t)
+                    )
                 except Exception as exc:
                     self.logger.warning("Could not register library drop target: %s", exc)
 
+
 def iniciar_app() -> None:
     root = TkinterDnD.Tk()
-    app = MokaMusicApp(root)
+    root.mokamusic_app = MokaMusicApp(root)
     root.mainloop()

@@ -50,7 +50,9 @@ class FileOrganizationServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             controller = FakeController(Path(temp_dir))
             controller.archivos = ["song.mp3"]
-            controller.tracks["song.mp3"] = CachedTrack({"artist": "Artist", "album": "Album", "title": "Song", "track_number": "1"})
+            controller.tracks["song.mp3"] = CachedTrack(
+                {"artist": "Artist", "album": "Album", "title": "Song", "track_number": "1"}
+            )
 
             plan = build_template_plan(controller, ["song.mp3"], "{artist}/{album}/{track_number:02d} - {title}")
 

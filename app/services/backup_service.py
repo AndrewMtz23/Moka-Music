@@ -4,7 +4,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-
 BACKUP_DIR = Path("backups")
 
 

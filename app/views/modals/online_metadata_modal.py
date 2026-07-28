@@ -6,7 +6,6 @@ from typing import Callable, Optional
 
 from ...services.online_metadata_service import OnlineMetadataResult
 
-
 FIELDS = ("title", "artist", "album", "year", "genre")
 
 

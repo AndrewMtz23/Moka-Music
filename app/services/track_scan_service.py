@@ -11,7 +11,6 @@ from mutagen.mp4 import MP4Cover
 from ..constants import DEFAULT_METADATA, FileFormats
 from .audio_quality_service import default_audio_quality, inspect_audio_quality_from_audio
 
-
 logger = logging.getLogger(__name__)
 
 

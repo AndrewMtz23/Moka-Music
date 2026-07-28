@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import Callable, Optional
 
-
 MetadataField = tuple[str, str]
 
 
@@ -84,9 +83,7 @@ def request_metadata_edit(
         nonlocal result
         if is_batch_edit:
             metadata = {
-                field: edit_vars[field].get().strip()
-                for field, _label_key in fields
-                if apply_vars[field].get()
+                field: edit_vars[field].get().strip() for field, _label_key in fields if apply_vars[field].get()
             }
             if not metadata:
                 messagebox.showwarning(

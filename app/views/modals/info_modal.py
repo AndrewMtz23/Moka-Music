@@ -124,7 +124,9 @@ def _render_numbered_steps(parent, lines: list[str], colors: dict[str, str]) -> 
         number, text = stripped.split(".", 1)
         row = tk.Frame(parent, background=colors["surface_alt"], padx=10, pady=8)
         row.pack(fill="x", pady=(0, 8))
-        badge = tk.Canvas(row, width=28, height=28, background=colors["surface_alt"], borderwidth=0, highlightthickness=0)
+        badge = tk.Canvas(
+            row, width=28, height=28, background=colors["surface_alt"], borderwidth=0, highlightthickness=0
+        )
         badge.pack(side="left", padx=(0, 10))
         badge.create_oval(2, 2, 26, 26, fill=colors["primary"], outline="")
         badge.create_text(14, 14, text=number.strip(), fill=colors["primary_text"], font=("Segoe UI Semibold", 9))

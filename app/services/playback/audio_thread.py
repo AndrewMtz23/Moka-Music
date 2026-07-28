@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Callable, Optional
 
-from .audio_player import audio_player
 from ...constants import DEFAULT_POLL_INTERVAL
+from .audio_player import audio_player
 
 
 class PlayerState(Enum):

@@ -6,7 +6,6 @@ from typing import Optional
 from ...constants import DEFAULT_VOLUME, FileFormats
 from ...utils.audio_utils import AudioUtils
 
-
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 try:

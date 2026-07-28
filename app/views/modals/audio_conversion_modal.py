@@ -18,8 +18,7 @@ def request_audio_conversion_options(parent, translator: Callable[..., str], cou
     result: dict[str, object] | None = None
     folder_var = tk.StringVar(value="")
     preset_options = [
-        (translator(f"audio_conversion.preset_{preset.id}"), preset.id)
-        for preset in AUDIO_CONVERSION_PRESETS
+        (translator(f"audio_conversion.preset_{preset.id}"), preset.id) for preset in AUDIO_CONVERSION_PRESETS
     ]
     preset_by_label = {label: preset_id for label, preset_id in preset_options}
     preset_var = tk.StringVar(value=preset_options[0][0])
@@ -30,16 +29,36 @@ def request_audio_conversion_options(parent, translator: Callable[..., str], cou
     container.pack(fill="both", expand=True)
     container.columnconfigure(1, weight=1)
 
-    ttk.Label(container, text=translator("audio_conversion.description", count=count), style="Muted.TLabel").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 12))
-    ttk.Label(container, text=translator("audio_conversion.preset")).grid(row=1, column=0, sticky="w", padx=(0, 8), pady=4)
-    ttk.Combobox(container, textvariable=preset_var, values=[label for label, _preset_id in preset_options], state="readonly", width=28).grid(row=1, column=1, sticky="w", pady=4)
+    ttk.Label(container, text=translator("audio_conversion.description", count=count), style="Muted.TLabel").grid(
+        row=0, column=0, columnspan=3, sticky="w", pady=(0, 12)
+    )
+    ttk.Label(container, text=translator("audio_conversion.preset")).grid(
+        row=1, column=0, sticky="w", padx=(0, 8), pady=4
+    )
+    ttk.Combobox(
+        container,
+        textvariable=preset_var,
+        values=[label for label, _preset_id in preset_options],
+        state="readonly",
+        width=28,
+    ).grid(row=1, column=1, sticky="w", pady=4)
 
-    ttk.Label(container, text=translator("audio_conversion.destination")).grid(row=2, column=0, sticky="w", padx=(0, 8), pady=4)
+    ttk.Label(container, text=translator("audio_conversion.destination")).grid(
+        row=2, column=0, sticky="w", padx=(0, 8), pady=4
+    )
     ttk.Entry(container, textvariable=folder_var).grid(row=2, column=1, sticky="ew", pady=4)
-    ttk.Button(container, text=translator("audio_conversion.browse"), command=lambda: _choose_folder(parent, translator, folder_var)).grid(row=2, column=2, sticky="e", padx=(8, 0), pady=4)
+    ttk.Button(
+        container,
+        text=translator("audio_conversion.browse"),
+        command=lambda: _choose_folder(parent, translator, folder_var),
+    ).grid(row=2, column=2, sticky="e", padx=(8, 0), pady=4)
 
-    ttk.Checkbutton(container, text=translator("audio_conversion.overwrite"), variable=overwrite_var).grid(row=3, column=1, sticky="w", pady=4)
-    ttk.Checkbutton(container, text=translator("audio_conversion.preserve_structure"), variable=preserve_structure_var).grid(row=4, column=1, sticky="w", pady=4)
+    ttk.Checkbutton(container, text=translator("audio_conversion.overwrite"), variable=overwrite_var).grid(
+        row=3, column=1, sticky="w", pady=4
+    )
+    ttk.Checkbutton(
+        container, text=translator("audio_conversion.preserve_structure"), variable=preserve_structure_var
+    ).grid(row=4, column=1, sticky="w", pady=4)
 
     def apply() -> None:
         nonlocal result
@@ -58,7 +77,9 @@ def request_audio_conversion_options(parent, translator: Callable[..., str], cou
 
     button_row = ttk.Frame(container)
     button_row.grid(row=5, column=0, columnspan=3, sticky="ew", pady=(18, 0))
-    ttk.Button(button_row, text=translator("metadata_edit.cancel"), command=modal.destroy, style="Secondary.TButton").pack(side="right")
+    ttk.Button(
+        button_row, text=translator("metadata_edit.cancel"), command=modal.destroy, style="Secondary.TButton"
+    ).pack(side="right")
     ttk.Button(button_row, text=translator("audio_conversion.convert"), command=apply).pack(side="right", padx=(0, 8))
 
     modal.wait_window()

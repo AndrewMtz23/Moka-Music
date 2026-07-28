@@ -11,7 +11,6 @@ from ..i18n import I18n
 from ..services.audio_quality_service import format_audio_quality
 from ..utils.text_cleanup import remove_feature_text
 
-
 COVER_SIZE = 112
 
 
@@ -306,8 +305,10 @@ class PreviewPanel(ttk.Frame):
 
     def update_preview(self, song_data: dict[str, Any]) -> None:
         self.current_song_data = song_data
-        title = song_data.get("title") or os.path.splitext(song_data.get("file_name", ""))[0] or self.t(
-            "preview.unknown_title"
+        title = (
+            song_data.get("title")
+            or os.path.splitext(song_data.get("file_name", ""))[0]
+            or self.t("preview.unknown_title")
         )
         self.title_label.configure(text=title)
 

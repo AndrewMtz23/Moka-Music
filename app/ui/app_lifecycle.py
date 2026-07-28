@@ -1,19 +1,20 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-from pathlib import Path
-import re
 import os
+import re
 import tkinter as tk
+from pathlib import Path
 from tkinter import messagebox, simpledialog
+from typing import Optional
 
-from ..constants import APP_NAME, COPYRIGHT, LOG_FILE, UISettings, VERSION
+from ..constants import APP_NAME, COPYRIGHT, LOG_FILE, VERSION, UISettings
 from ..controllers.config_controller import AppConfig, ConfigController
 from ..controllers.cover_controller import CoverController
 from ..controllers.drop_controller import DropController
 from ..controllers.library_ui_controller import LibraryUiController
+from ..controllers.menu_controller import MenuCallbacks, MenuController
 from ..controllers.metadata_apply_controller import MetadataApplyController
 from ..controllers.metadata_dialog_controller import MetadataDialogController
-from ..controllers.menu_controller import MenuCallbacks, MenuController
 from ..controllers.playback_selection_controller import PlaybackSelectionController
 from ..controllers.playlist_workflow_controller import PlaylistWorkflowController
 from ..controllers.rename_controller import RenameController
@@ -21,8 +22,8 @@ from ..controllers.selection_controller import SelectionController
 from ..controllers.ui_text_controller import UiTextController
 from ..i18n import normalize_language
 from ..models import FilterMode, SortMode
-from ..services.custom_theme_service import export_custom_theme, import_custom_theme, public_theme_payload
 from ..services.backup_service import BACKUP_DIR
+from ..services.custom_theme_service import export_custom_theme, import_custom_theme, public_theme_payload
 from ..services.help_diagnostics_service import (
     detect_system_language,
     diagnostic_lines,
@@ -32,11 +33,11 @@ from ..services.help_diagnostics_service import (
 from ..services.library_compare_service import compare_libraries
 from ..services.playback_history_service import last_played_map, playback_history_summary, played_paths
 from ..ui_helpers.feedback import ProgressDialog, show_toast
+from ..views.modals.about_modal import show_about_modal
+from ..views.modals.custom_theme_manager_modal import manage_custom_themes
+from ..views.modals.info_modal import show_info_modal
 from ..views.modals.library_compare_modal import show_library_compare_modal
 from ..views.modals.library_stats_modal import show_library_stats_modal
-from ..views.modals.about_modal import show_about_modal
-from ..views.modals.info_modal import show_info_modal
-from ..views.modals.custom_theme_manager_modal import manage_custom_themes
 from ..views.modals.playback_history_modal import show_playback_history_modal
 from ..views.modals.theme_settings_modal import request_theme_selection
 
@@ -133,7 +134,6 @@ class AppLifecycleMixin:
             self.menu_controller.set_theme_colors(self.style_manager.get_theme_colors())
             self.menu_controller.callbacks = callbacks
         return self.menu_controller
-
 
     def _sort_options(self) -> list[str]:
         return [
@@ -486,11 +486,7 @@ class AppLifecycleMixin:
             "density": self.current_density,
             "accent_color": self.current_accent_color,
         }
-        self.custom_themes = [
-            theme
-            for theme in getattr(self, "custom_themes", [])
-            if theme.get("id") != theme_id
-        ]
+        self.custom_themes = [theme for theme in getattr(self, "custom_themes", []) if theme.get("id") != theme_id]
         self.custom_themes.append(custom_theme)
         self.style_manager.set_custom_themes(self.custom_themes)
         self._change_appearance(
@@ -516,7 +512,9 @@ class AppLifecycleMixin:
             self.current_accent_color = ""
             self._change_appearance(1.0, "normal", "")
             self._change_theme("light")
-        elif self.current_theme not in {theme.get("id") for theme in self.custom_themes} and self.current_theme.startswith("custom_"):
+        elif self.current_theme not in {
+            theme.get("id") for theme in self.custom_themes
+        } and self.current_theme.startswith("custom_"):
             self._change_theme("light")
         else:
             self._change_theme(self.current_theme)
@@ -753,7 +751,6 @@ class AppLifecycleMixin:
     def _get_library_panel_for_search(self, variable) -> Optional[dict[str, object]]:
         return self._selection_controller().panel_for_search(self._library_panels, variable)
 
-
     def _selection_controller(self) -> SelectionController:
         if not hasattr(self, "selection_controller"):
             self.selection_controller = SelectionController(self._filename_from_tree_item)
@@ -815,7 +812,6 @@ class AppLifecycleMixin:
             self.ui_text_controller.set_translator(self.t)
         return self.ui_text_controller
 
-
     def _on_close(self) -> None:
         if not messagebox.askokcancel(self.t("dialog.exit"), self.t("message.close_app", app_name=APP_NAME)):
             return
@@ -829,6 +825,3 @@ class AppLifecycleMixin:
         finally:
             self.root.quit()
             self.root.destroy()
-
-
-

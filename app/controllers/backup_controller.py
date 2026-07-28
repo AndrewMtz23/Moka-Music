@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
@@ -7,7 +7,6 @@ from typing import Callable, Optional
 from ..models import ActionResult
 from ..services.backup_service import iter_backup_payloads, read_backup_payload
 from ..utils.ui_formatting import backup_action_label
-
 
 BackupGroup = tuple[object, object, list[str]]
 ControllerTreePair = tuple[object, object]

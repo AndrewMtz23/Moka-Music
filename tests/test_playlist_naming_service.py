@@ -21,7 +21,9 @@ class PlaylistNamingServiceTests(unittest.TestCase):
 
     def test_infers_missing_artist_from_filename(self):
         self.assertEqual(
-            playlist_filename_from_metadata("TBX - OYE MORENO.mp3", {"track_number": "2", "title": "OYE MORENO"}, set()),
+            playlist_filename_from_metadata(
+                "TBX - OYE MORENO.mp3", {"track_number": "2", "title": "OYE MORENO"}, set()
+            ),
             "002 - TBX - OYE MORENO.mp3",
         )
 

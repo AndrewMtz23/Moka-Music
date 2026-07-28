@@ -49,9 +49,7 @@ class DropControllerTests(unittest.TestCase):
             ignored = folder / "notes.txt"
             ignored.write_text("nope", encoding="utf-8")
 
-            payload = DropController().classify_paths(
-                [str(library), str(audio), str(image), str(ignored)]
-            )
+            payload = DropController().classify_paths([str(library), str(audio), str(image), str(ignored)])
 
             self.assertEqual(payload.folders, [str(library)])
             self.assertEqual(payload.audio_files, [str(audio)])

@@ -3,7 +3,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.services.audio_conversion_service import build_conversion_items, build_ffmpeg_command, convert_audio_files, preset_by_id
+from app.services.audio_conversion_service import (
+    build_conversion_items,
+    build_ffmpeg_command,
+    convert_audio_files,
+    preset_by_id,
+)
 
 
 class AudioConversionServiceTests(unittest.TestCase):
@@ -80,7 +85,6 @@ class AudioConversionServiceTests(unittest.TestCase):
         run.return_value.stderr = ""
         with tempfile.TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "in.wav"
-            destination = Path(temp_dir) / "out.mp3"
             source.touch()
 
             result = convert_audio_files(build_conversion_items([source], temp_dir, ".mp3"))

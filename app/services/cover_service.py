@@ -6,7 +6,6 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.constants import FileFormats
 
-
 COVER_FILENAME = "PORTADA.jpg"
 
 PREFERRED_COVER_NAMES = (
@@ -20,7 +19,9 @@ PREFERRED_COVER_NAMES = (
 )
 
 
-def process_cover_image(image_path: str | Path, *, max_size: tuple[int, int] = (800, 800), quality: int = 90) -> Optional[bytes]:
+def process_cover_image(
+    image_path: str | Path, *, max_size: tuple[int, int] = (800, 800), quality: int = 90
+) -> Optional[bytes]:
     try:
         with Image.open(image_path) as image:
             if image.mode != "RGB":
@@ -71,11 +72,7 @@ def find_folder_cover(audio_path: str | Path) -> Optional[str]:
     folder = Path(audio_path).parent
     if not folder.exists():
         return None
-    image_paths = [
-        item
-        for item in folder.iterdir()
-        if item.is_file() and item.suffix.lower() in FileFormats.IMAGES
-    ]
+    image_paths = [item for item in folder.iterdir() if item.is_file() and item.suffix.lower() in FileFormats.IMAGES]
     if not image_paths:
         return None
     for preferred in PREFERRED_COVER_NAMES:

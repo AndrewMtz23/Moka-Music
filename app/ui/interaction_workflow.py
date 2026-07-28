@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 from pathlib import Path
@@ -412,9 +412,7 @@ class InteractionWorkflowMixin:
             payload = self._drop_controller().payload_from_raw(event.data, splitlist=self.root.tk.splitlist)
             library_name = self._library_debug_name(controller, tree)
             library_label = (
-                self.t("panel.main_library")
-                if library_name == "main_library"
-                else self.t("panel.incoming_library")
+                self.t("panel.main_library") if library_name == "main_library" else self.t("panel.incoming_library")
             )
 
             for folder in payload.folders:
@@ -483,4 +481,3 @@ class InteractionWorkflowMixin:
 
     def _format_action_error(self, result) -> str:
         return format_action_error(result, self.t)
-

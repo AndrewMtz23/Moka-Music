@@ -9,7 +9,6 @@ from ..i18n import I18n
 from ..models import ActionResult
 from .song_info_service import SongInfo
 
-
 logger = logging.getLogger(__name__)
 
 
