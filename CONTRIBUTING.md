@@ -32,9 +32,10 @@ Optional deeper diagnostics:
 
 ```powershell
 .\.venv\Scripts\pylint.exe app tests tools --exit-zero
+.\.venv\Scripts\pip-audit.exe -r requirements.txt
 ```
 
-Pylint is intentionally optional for now. Ruff and the unit tests are the required checks.
+Pylint is intentionally optional for now. Ruff and the unit tests are the main required checks.
 
 ## Release Checklist
 
@@ -48,3 +49,5 @@ Before publishing a release:
 ```
 
 Package Windows builds by zipping the full `dist/MokaMusic` folder, not only `MokaMusic.exe`.
+
+The `Windows Release Build` workflow can also generate the zip from GitHub Actions through `Run workflow`.
