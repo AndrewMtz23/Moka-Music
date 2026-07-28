@@ -226,7 +226,9 @@ Run the full test suite:
 .\.venv\Scripts\python.exe -m unittest discover -s tests -p "test*.py"
 ```
 
-Create an automated GitHub Release from `main` by pushing a version tag:
+After the release workflow is merged into `main`, a successful `Python CI` run on `main` creates a GitHub Release automatically when `app/constants.py` has a new `VERSION`.
+
+You can also create a GitHub Release manually by pushing a version tag:
 
 ```powershell
 git tag v2.2.0

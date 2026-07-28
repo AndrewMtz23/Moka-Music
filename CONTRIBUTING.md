@@ -52,7 +52,9 @@ Package Windows builds by zipping the full `dist/MokaMusic` folder, not only `Mo
 
 The `Windows Release Build` workflow can also generate the zip from GitHub Actions through `Run workflow`.
 
-To publish a GitHub Release automatically, push a version tag from `main`:
+After the release workflow is merged into `main`, a successful `Python CI` run on `main` creates a release automatically when `app/constants.py` has a new `VERSION`.
+
+You can also publish a GitHub Release manually by pushing a version tag from `main`:
 
 ```powershell
 git tag v2.2.0
