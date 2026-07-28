@@ -51,3 +51,12 @@ Before publishing a release:
 Package Windows builds by zipping the full `dist/MokaMusic` folder, not only `MokaMusic.exe`.
 
 The `Windows Release Build` workflow can also generate the zip from GitHub Actions through `Run workflow`.
+
+To publish a GitHub Release automatically, push a version tag from `main`:
+
+```powershell
+git tag v2.2.0
+git push origin v2.2.0
+```
+
+The `GitHub Release` workflow builds the Windows zip and attaches it to the release.

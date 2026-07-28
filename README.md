@@ -226,6 +226,13 @@ Run the full test suite:
 .\.venv\Scripts\python.exe -m unittest discover -s tests -p "test*.py"
 ```
 
+Create an automated GitHub Release from `main` by pushing a version tag:
+
+```powershell
+git tag v2.2.0
+git push origin v2.2.0
+```
+
 ## Dependencies
 
 `requirements.txt` is the source of truth:
