@@ -1,0 +1,53 @@
+name: Windows Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version, for example v2.2.0
+        required: true
+        default: v2.2.0
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check app tests tools
+
+      - name: Format check
+        run: ruff format app tests tools --check
+
+      - name: Tests
+        run: python -m unittest discover -s tests -p "test*.py"
+
+      - name: Build Windows executable
+        run: pyinstaller MokaMusic.spec --noconfirm --clean
+
+      - name: Package release
+        run: Compress-Archive -Path dist\MokaMusic -DestinationPath "MokaMusic-${{ inputs.version }}-windows.zip" -Force
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MokaMusic-${{ inputs.version }}-windows
+          path: MokaMusic-${{ inputs.version }}-windows.zip

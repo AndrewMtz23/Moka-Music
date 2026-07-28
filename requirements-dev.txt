@@ -1,2 +1,4 @@
 ruff>=0.16.0
 pylint>=3.3.0
+pip-audit>=2.7.0
+pyinstaller>=6.0.0

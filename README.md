@@ -208,6 +208,12 @@ Run optional Pylint diagnostics:
 .\.venv\Scripts\pylint.exe app tests tools --exit-zero
 ```
 
+Run dependency audit:
+
+```powershell
+.\.venv\Scripts\pip-audit.exe -r requirements.txt
+```
+
 Compile key modules:
 
 ```powershell
