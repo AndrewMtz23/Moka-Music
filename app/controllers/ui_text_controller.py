@@ -2,7 +2,6 @@ from typing import Callable
 
 from ..models import FilterMode
 
-
 TEXT_WIDGET_KEYS: dict[str, tuple[str, str]] = {
     "main_library_frame": ("text", "panel.main_library"),
     "incoming_library_frame": ("text", "panel.incoming_library"),

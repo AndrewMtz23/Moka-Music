@@ -1,7 +1,7 @@
-from dataclasses import dataclass
-from typing import Callable
 import tkinter as tk
+from dataclasses import dataclass
 from tkinter import ttk
+from typing import Callable
 
 
 @dataclass

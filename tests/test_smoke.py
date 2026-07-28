@@ -1,6 +1,6 @@
 import importlib
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 
 class SmokeTests(unittest.TestCase):

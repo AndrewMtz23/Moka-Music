@@ -46,7 +46,9 @@ def confirm_file_plan_preview(parent, translator: Callable[..., str], title: str
     button_row = ttk.Frame(container)
     button_row.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(12, 0))
     ttk.Button(button_row, text=translator("file_organization.apply"), command=apply).pack(side="left")
-    ttk.Button(button_row, text=translator("metadata_edit.cancel"), command=modal.destroy, style="Secondary.TButton").pack(side="right")
+    ttk.Button(
+        button_row, text=translator("metadata_edit.cancel"), command=modal.destroy, style="Secondary.TButton"
+    ).pack(side="right")
 
     modal.wait_window()
     return bool(confirmed.get())
@@ -89,4 +91,6 @@ def show_playlist_validation_modal(parent, translator: Callable[..., str], rows:
 
     button_row = ttk.Frame(container)
     button_row.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(12, 0))
-    ttk.Button(button_row, text=translator("audio_tools.close"), command=modal.destroy, style="Secondary.TButton").pack(side="right")
+    ttk.Button(button_row, text=translator("audio_tools.close"), command=modal.destroy, style="Secondary.TButton").pack(
+        side="right"
+    )

@@ -4,7 +4,6 @@ from ..views.modals.batch_edit_modal import request_batch_metadata
 from ..views.modals.clear_metadata_modal import request_clear_metadata
 from ..views.modals.edit_metadata_modal import request_metadata_edit
 
-
 MetadataField = tuple[str, str]
 
 METADATA_FIELDS: list[MetadataField] = [

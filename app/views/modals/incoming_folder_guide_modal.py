@@ -1,7 +1,6 @@
-from typing import Callable
-from tkinter import ttk
 import tkinter as tk
-
+from tkinter import ttk
+from typing import Callable
 
 GuideAction = tuple[str, str, Callable[[], None]]
 

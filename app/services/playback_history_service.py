@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +19,9 @@ def record_playback(
     normalized = normalize_history_path(filepath)
     now = played_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
     records = [dict(item) for item in history if isinstance(item, dict)]
-    existing = next((item for item in records if normalize_history_path(str(item.get("filepath", ""))) == normalized), None)
+    existing = next(
+        (item for item in records if normalize_history_path(str(item.get("filepath", ""))) == normalized), None
+    )
 
     if existing is None:
         existing = {"filepath": filepath, "play_count": 0}

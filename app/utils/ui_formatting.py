@@ -1,7 +1,6 @@
 import os
 from typing import Callable
 
-
 VISUAL_TREE_TAGS = {"odd_row", "even_row", "selected", "placeholder"}
 
 METADATA_LABEL_KEYS = {
@@ -94,10 +93,7 @@ def backup_action_label(metadata, t: Callable[..., str]) -> str:
 
 
 def format_metadata_summary(metadata: dict[str, str], t: Callable[..., str]) -> str:
-    return "\n".join(
-        f"- {t(PREVIEW_LABEL_KEYS.get(key, key))}: {value}"
-        for key, value in metadata.items()
-    )
+    return "\n".join(f"- {t(PREVIEW_LABEL_KEYS.get(key, key))}: {value}" for key, value in metadata.items())
 
 
 def format_action_error(result, t: Callable[..., str], limit: int = 8) -> str:

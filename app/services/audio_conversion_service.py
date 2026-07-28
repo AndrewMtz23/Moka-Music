@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
 import shutil
 import subprocess
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
-
 
 SUPPORTED_OUTPUT_FORMATS = (".mp3", ".wav", ".flac", ".ogg")
 
@@ -94,7 +93,9 @@ def convert_audio_files(
             if completed.returncode == 0:
                 converted += 1
             else:
-                detail = completed.stderr.strip() or completed.stdout.strip() or f"ffmpeg exited with {completed.returncode}"
+                detail = (
+                    completed.stderr.strip() or completed.stdout.strip() or f"ffmpeg exited with {completed.returncode}"
+                )
                 errors.append(f"{item.source.name}: {detail}")
         except Exception as exc:
             errors.append(f"{item.source.name}: {exc}")
@@ -104,7 +105,9 @@ def convert_audio_files(
     return AudioConversionResult(converted=converted, errors=errors, items=items)
 
 
-def build_ffmpeg_command(source: Path, destination: Path, *, overwrite: bool = False, bitrate: str | None = None) -> list[str]:
+def build_ffmpeg_command(
+    source: Path, destination: Path, *, overwrite: bool = False, bitrate: str | None = None
+) -> list[str]:
     command = ["ffmpeg", "-y" if overwrite else "-n", "-i", str(source)]
     suffix = destination.suffix.lower()
     if suffix == ".mp3":

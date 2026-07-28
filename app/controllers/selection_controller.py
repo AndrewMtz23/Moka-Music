@@ -1,6 +1,5 @@
 from typing import Callable, Optional
 
-
 LibrarySelection = tuple[object, object, list[str]]
 
 

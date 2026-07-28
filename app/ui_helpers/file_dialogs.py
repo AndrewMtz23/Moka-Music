@@ -29,7 +29,9 @@ class FileHandler:
 
     def seleccionar_carpeta(self, title: Optional[str] = None) -> Optional[str]:
         try:
-            folder = filedialog.askdirectory(title=title or self.t("file.select_folder"), initialdir=self._last_directory)
+            folder = filedialog.askdirectory(
+                title=title or self.t("file.select_folder"), initialdir=self._last_directory
+            )
             if not folder:
                 return None
             if not self.validar_carpeta(folder):
@@ -144,7 +146,9 @@ class FileHandler:
             return filepath or None
         except Exception as exc:
             self.logger.error("Error selecting library report destination: %s", exc)
-            messagebox.showerror(self.t("dialog.error"), self.t("library_report_export.could_not_open_picker", error=exc))
+            messagebox.showerror(
+                self.t("dialog.error"), self.t("library_report_export.could_not_open_picker", error=exc)
+            )
             return None
 
     def seleccionar_metadata_json(self) -> Optional[str]:

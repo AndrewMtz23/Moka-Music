@@ -16,7 +16,9 @@ def request_search_replace_metadata(parent, translator: Callable[..., str]) -> d
     modal.resizable(False, False)
 
     result: dict[str, object] | None = None
-    field_labels = [(field, translator(f"online_metadata.field_{field}", default=field)) for field in METADATA_TOOL_FIELDS]
+    field_labels = [
+        (field, translator(f"online_metadata.field_{field}", default=field)) for field in METADATA_TOOL_FIELDS
+    ]
     field_var = tk.StringVar(value=field_labels[0][1])
     search_var = tk.StringVar()
     replacement_var = tk.StringVar()
@@ -26,7 +28,9 @@ def request_search_replace_metadata(parent, translator: Callable[..., str]) -> d
     container.pack(fill="both", expand=True)
     container.columnconfigure(1, weight=1)
 
-    ttk.Label(container, text=translator("metadata_tools.field")).grid(row=0, column=0, sticky="w", padx=(0, 8), pady=(0, 10))
+    ttk.Label(container, text=translator("metadata_tools.field")).grid(
+        row=0, column=0, sticky="w", padx=(0, 8), pady=(0, 10)
+    )
     ttk.Combobox(
         container,
         textvariable=field_var,
@@ -34,10 +38,14 @@ def request_search_replace_metadata(parent, translator: Callable[..., str]) -> d
         state="readonly",
     ).grid(row=0, column=1, sticky="ew", pady=(0, 10))
 
-    ttk.Label(container, text=translator("metadata_tools.search")).grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(0, 10))
+    ttk.Label(container, text=translator("metadata_tools.search")).grid(
+        row=1, column=0, sticky="w", padx=(0, 8), pady=(0, 10)
+    )
     ttk.Entry(container, textvariable=search_var).grid(row=1, column=1, sticky="ew", pady=(0, 10))
 
-    ttk.Label(container, text=translator("metadata_tools.replace")).grid(row=2, column=0, sticky="w", padx=(0, 8), pady=(0, 10))
+    ttk.Label(container, text=translator("metadata_tools.replace")).grid(
+        row=2, column=0, sticky="w", padx=(0, 8), pady=(0, 10)
+    )
     ttk.Entry(container, textvariable=replacement_var).grid(row=2, column=1, sticky="ew", pady=(0, 10))
 
     ttk.Checkbutton(
@@ -62,7 +70,9 @@ def request_search_replace_metadata(parent, translator: Callable[..., str]) -> d
 
     button_row = ttk.Frame(container)
     button_row.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(20, 0))
-    ttk.Button(button_row, text=translator("metadata_edit.cancel"), command=modal.destroy, style="Secondary.TButton").pack(side="right")
+    ttk.Button(
+        button_row, text=translator("metadata_edit.cancel"), command=modal.destroy, style="Secondary.TButton"
+    ).pack(side="right")
     ttk.Button(button_row, text=translator("change_preview.apply"), command=apply).pack(side="right", padx=(0, 8))
 
     modal.wait_window()

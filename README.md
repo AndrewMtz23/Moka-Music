@@ -184,6 +184,30 @@ From the `Tools` menu you can use:
 
 ## Tests
 
+Install development tools:
+
+```powershell
+pip install -r requirements-dev.txt
+```
+
+Run lint checks:
+
+```powershell
+.\.venv\Scripts\ruff.exe check app tests tools
+```
+
+Check formatting:
+
+```powershell
+.\.venv\Scripts\ruff.exe format app tests tools --check
+```
+
+Run optional Pylint diagnostics:
+
+```powershell
+.\.venv\Scripts\pylint.exe app tests tools --exit-zero
+```
+
 Compile key modules:
 
 ```powershell

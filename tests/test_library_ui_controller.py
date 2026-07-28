@@ -172,9 +172,7 @@ class LibraryUiControllerTests(unittest.TestCase):
             "search_var": FakeVar("one"),
             "filter_mode": FilterMode.ALL,
         }
-        self.assertFalse(
-            ui_controller.can_reorder_current_view(controller=controller, tree=tree, panel=filtered_panel)
-        )
+        self.assertFalse(ui_controller.can_reorder_current_view(controller=controller, tree=tree, panel=filtered_panel))
 
     def test_update_treeview_marks_metadata_cover_and_duplicate_issues(self):
         with tempfile.TemporaryDirectory() as temp_dir:

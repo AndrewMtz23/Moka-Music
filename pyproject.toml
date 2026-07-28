@@ -1,0 +1,43 @@
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+ignore = [
+  "BLE001",
+  "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tools/benchmark_library_load.py" = ["E402"]
+
+[tool.pylint.main]
+py-version = "3.10"
+jobs = 0
+
+[tool.pylint.format]
+max-line-length = 120
+
+[tool.pylint.messages_control]
+disable = [
+  "broad-exception-caught",
+  "duplicate-code",
+  "line-too-long",
+  "missing-class-docstring",
+  "missing-function-docstring",
+  "missing-module-docstring",
+  "too-few-public-methods",
+  "too-many-arguments",
+  "too-many-branches",
+  "too-many-instance-attributes",
+  "too-many-locals",
+  "too-many-positional-arguments",
+  "too-many-public-methods",
+  "too-many-statements",
+]

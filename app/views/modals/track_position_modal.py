@@ -134,7 +134,9 @@ def request_track_position(
         nonlocal result
         value = current_value()
         if value is None:
-            messagebox.showwarning(title, translator("move_position.invalid", min=lower_bound, max=upper_bound), parent=modal)
+            messagebox.showwarning(
+                title, translator("move_position.invalid", min=lower_bound, max=upper_bound), parent=modal
+            )
             return
         result = value
         modal.destroy()

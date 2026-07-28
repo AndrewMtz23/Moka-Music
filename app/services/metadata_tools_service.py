@@ -3,8 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from ..utils.text_cleanup import compact_spaces, clean_text_edges
-
+from ..utils.text_cleanup import clean_text_edges, compact_spaces
 
 METADATA_TOOL_FIELDS = ("title", "artist", "album", "album_artist", "genre", "year", "track_number", "comment")
 
@@ -23,7 +22,9 @@ def normalize_metadata_values(metadata: dict[str, str]) -> dict[str, str]:
         original = str(metadata.get(field, "") or "")
         if not original:
             continue
-        normalized = normalize_metadata_text(original, title_case=field in {"title", "artist", "album", "album_artist", "genre"})
+        normalized = normalize_metadata_text(
+            original, title_case=field in {"title", "artist", "album", "album_artist", "genre"}
+        )
         if normalized != original:
             updates[field] = normalized
     return updates
@@ -42,7 +43,25 @@ def normalize_metadata_text(value: str, *, title_case: bool = False) -> str:
 
 
 def smart_title(value: str) -> str:
-    keep_lower = {"a", "al", "and", "con", "da", "de", "del", "el", "en", "for", "la", "las", "los", "of", "the", "to", "y"}
+    keep_lower = {
+        "a",
+        "al",
+        "and",
+        "con",
+        "da",
+        "de",
+        "del",
+        "el",
+        "en",
+        "for",
+        "la",
+        "las",
+        "los",
+        "of",
+        "the",
+        "to",
+        "y",
+    }
     words = str(value or "").split(" ")
     titled: list[str] = []
     for index, word in enumerate(words):

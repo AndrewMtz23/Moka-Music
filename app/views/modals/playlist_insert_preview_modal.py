@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 from typing import Callable
 
-
 PreviewRow = tuple[str, str, str, str, str]
 
 
@@ -118,11 +117,7 @@ def request_playlist_insert_preview(
         rows = playlist_preview_rows(current_plan)
         issues = playlist_preview_issues(current_plan)
         query = search_var.get().strip()
-        visible_rows = [
-            (plan_index, row)
-            for plan_index, row in enumerate(rows)
-            if row_matches_query(row, query)
-        ]
+        visible_rows = [(plan_index, row) for plan_index, row in enumerate(rows) if row_matches_query(row, query)]
         description = translator("playlist_preview.description", count=len(rows))
         if query:
             description += " " + translator("playlist_preview.search_results", shown=len(visible_rows), total=len(rows))
@@ -154,9 +149,7 @@ def request_playlist_insert_preview(
 
     def selected_names() -> list[str]:
         return [
-            current_plan.items[index].old_name
-            for index in selected_indices()
-            if 0 <= index < len(current_plan.items)
+            current_plan.items[index].old_name for index in selected_indices() if 0 <= index < len(current_plan.items)
         ]
 
     def rebuild_from_order(order: list[str], selected: list[str]) -> None:
@@ -265,7 +258,9 @@ def request_playlist_insert_preview(
     def clear_search() -> None:
         search_var.set("")
 
-    ttk.Button(search_row, text=translator("playlist_preview.clear_search"), command=clear_search, style="Secondary.TButton").grid(
+    ttk.Button(
+        search_row, text=translator("playlist_preview.clear_search"), command=clear_search, style="Secondary.TButton"
+    ).grid(
         row=0,
         column=2,
         sticky="e",

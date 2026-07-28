@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
 import json
 import shutil
+from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
 from .backup_service import BACKUP_DIR, safe_backup_folder_name
 from .file_service import sanitize_filename
 from .playback_history_service import normalize_history_path
-
 
 DEFAULT_RENAME_TEMPLATE = "{track_number:03d} - {artist} - {title}"
 DEFAULT_ORGANIZE_TEMPLATE = "{artist}/{album}/{track_number:02d} - {title}"
@@ -232,8 +231,8 @@ def _matches_text(current: object, expected: str) -> bool:
 def _duration_limit_seconds(value: str) -> float:
     try:
         minutes = float(str(value or "").strip())
-    except ValueError:
-        raise ValueError("Duration criteria must use minutes, for example duration:60")
+    except ValueError as exc:
+        raise ValueError("Duration criteria must use minutes, for example duration:60") from exc
     if minutes <= 0:
         raise ValueError("Duration criteria must be greater than zero minutes")
     return max(1.0, minutes) * 60.0

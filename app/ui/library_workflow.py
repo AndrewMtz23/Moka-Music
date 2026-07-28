@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 import queue
@@ -611,4 +611,3 @@ class LibraryWorkflowMixin:
             self.preview.update_preview(metadata)
         else:
             self.preview.show_error_state(self.t("preview.could_not_read"))
-

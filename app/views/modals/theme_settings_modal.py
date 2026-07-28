@@ -6,7 +6,6 @@ from typing import Callable
 
 from ...ui.theme import THEME_PRESETS, is_valid_hex_color, palette_with_accent
 
-
 THEME_CHOICES = (
     ("light", "theme_settings.light"),
     ("dark", "theme_settings.dark"),
@@ -53,7 +52,9 @@ def request_theme_selection(
     custom_themes = custom_themes or []
     theme_options = theme_choice_labels(translator, custom_themes)
     custom_theme_by_id = {str(theme.get("id", "") or ""): theme for theme in custom_themes}
-    theme_var = tk.StringVar(value=current_theme if current_theme in {choice[0] for choice in theme_options} else "light")
+    theme_var = tk.StringVar(
+        value=current_theme if current_theme in {choice[0] for choice in theme_options} else "light"
+    )
     font_scale_var = tk.StringVar(value=font_scale_label(font_scale))
     density_var = tk.StringVar(value=density_label(translator, density))
     accent_var = tk.StringVar(value=accent_color.lower() if is_valid_hex_color(accent_color) else "")
@@ -155,7 +156,9 @@ def request_theme_selection(
             highlightcolor=palette["primary"],
         )
         apply_preview_palette(preview_widgets, palette)
-        apply_preview_layout(preview_widgets, selected_font_scale(font_scale_var.get()), selected_density(translator, density_var.get()))
+        apply_preview_layout(
+            preview_widgets, selected_font_scale(font_scale_var.get()), selected_density(translator, density_var.get())
+        )
         accent_swatch.configure(background=accent_var.get() or palette["primary"])
         accent_value.configure(text=accent_var.get() or translator("theme_settings.default_accent"))
 
@@ -174,7 +177,11 @@ def request_theme_selection(
 
     def choose_accent() -> None:
         theme_id = selected_theme_id()
-        current_color = accent_var.get() if is_valid_hex_color(accent_var.get()) else preview_palette(theme_id, custom_themes=custom_themes)["primary"]
+        current_color = (
+            accent_var.get()
+            if is_valid_hex_color(accent_var.get())
+            else preview_palette(theme_id, custom_themes=custom_themes)["primary"]
+        )
         _rgb, selected_color = colorchooser.askcolor(
             parent=modal,
             color=current_color,
@@ -192,9 +199,7 @@ def request_theme_selection(
         fullscreen_var.set(enabled)
         modal.attributes("-fullscreen", enabled)
         fullscreen_button.configure(
-            text=translator("theme_settings.exit_fullscreen")
-            if enabled
-            else translator("theme_settings.fullscreen")
+            text=translator("theme_settings.exit_fullscreen") if enabled else translator("theme_settings.fullscreen")
         )
 
     def toggle_fullscreen(_event=None) -> str:
@@ -267,7 +272,9 @@ def request_theme_selection(
     return result
 
 
-def theme_choice_labels(translator: Callable[..., str], custom_themes: list[dict[str, object]] | None = None) -> list[tuple[str, str]]:
+def theme_choice_labels(
+    translator: Callable[..., str], custom_themes: list[dict[str, object]] | None = None
+) -> list[tuple[str, str]]:
     choices = [(theme_id, translator(label_key)) for theme_id, label_key in THEME_CHOICES]
     for theme in custom_themes or []:
         theme_id = str(theme.get("id", "") or "")
@@ -277,7 +284,9 @@ def theme_choice_labels(translator: Callable[..., str], custom_themes: list[dict
     return choices
 
 
-def preview_palette(theme_id: str, accent_color: str = "", custom_themes: list[dict[str, object]] | None = None) -> dict[str, str]:
+def preview_palette(
+    theme_id: str, accent_color: str = "", custom_themes: list[dict[str, object]] | None = None
+) -> dict[str, str]:
     for theme in custom_themes or []:
         if str(theme.get("id", "") or "") == theme_id:
             base_theme = str(theme.get("base_theme", "light") or "light")
@@ -356,7 +365,9 @@ def build_preview_widgets(parent: tk.Frame, translator: Callable[..., str]) -> d
     footer.grid(row=3, column=0, sticky="ew", padx=12, pady=(0, 12))
     footer.columnconfigure(0, weight=1)
     widgets["footer"] = footer
-    widgets["status"] = tk.Label(footer, text=translator("filter.results", shown=114, total=794), anchor="w", padx=10, pady=8)
+    widgets["status"] = tk.Label(
+        footer, text=translator("filter.results", shown=114, total=794), anchor="w", padx=10, pady=8
+    )
     widgets["status"].grid(row=0, column=0, sticky="ew")
     widgets["success_chip"] = tk.Label(footer, text=translator("toast.done"), padx=10, pady=8)
     widgets["success_chip"].grid(row=0, column=1, sticky="e", padx=(8, 0))

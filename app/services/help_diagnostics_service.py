@@ -28,10 +28,7 @@ def missing_translation_report() -> dict[str, list[str]]:
     all_keys = set()
     for translations in TRANSLATIONS.values():
         all_keys.update(translations.keys())
-    return {
-        language: sorted(all_keys - set(TRANSLATIONS.get(language, {}).keys()))
-        for language in SUPPORTED_LANGUAGES
-    }
+    return {language: sorted(all_keys - set(TRANSLATIONS.get(language, {}).keys())) for language in SUPPORTED_LANGUAGES}
 
 
 def format_missing_translation_report(report: dict[str, list[str]]) -> str:

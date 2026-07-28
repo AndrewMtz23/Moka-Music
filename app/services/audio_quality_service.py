@@ -5,7 +5,6 @@ from typing import Any
 
 import mutagen
 
-
 LOW_BITRATE_THRESHOLD_KBPS = 128
 
 

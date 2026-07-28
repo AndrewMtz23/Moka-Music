@@ -1,8 +1,8 @@
+import tkinter as tk
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
-import tkinter as tk
 from tkinter import ttk
+from typing import Callable
 
 from ..controllers.metadata_controller import MetadataController
 from ..models import FilterMode

@@ -2,7 +2,6 @@ import os
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-
 ProgressCallback = Callable[[int, int, str], bool]
 
 
@@ -34,11 +33,7 @@ class PreviewMetadataTarget:
 
 class MetadataApplyController:
     def metadata_from_vars(self, meta_vars: dict[str, object]) -> dict[str, str]:
-        return {
-            key: value.get().strip()
-            for key, value in meta_vars.items()
-            if value.get().strip()
-        }
+        return {key: value.get().strip() for key, value in meta_vars.items() if value.get().strip()}
 
     def first_selected_target(
         self,
@@ -179,11 +174,7 @@ class MetadataApplyController:
         data = getattr(result, "data", None)
         if not isinstance(data, dict):
             return []
-        return [
-            str(filename)
-            for filename in data.get("shifted_filenames", [])
-            if filename
-        ]
+        return [str(filename) for filename in data.get("shifted_filenames", []) if filename]
 
     def apply_all(
         self,

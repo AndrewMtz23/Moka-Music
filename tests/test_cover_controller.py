@@ -61,9 +61,7 @@ class CoverControllerTests(unittest.TestCase):
             Image.new("RGB", (20, 20), color="red").save(folder / "cover.jpg")
             controller = FakeController(folder)
 
-            plan = CoverController().build_auto_cover_plan(
-                [(controller, "tree", ["one.mp3", "two.mp3"])]
-            )
+            plan = CoverController().build_auto_cover_plan([(controller, "tree", ["one.mp3", "two.mp3"])])
 
             self.assertEqual(plan.planned_count, 2)
             self.assertEqual(plan.missing, [])

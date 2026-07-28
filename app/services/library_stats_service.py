@@ -7,7 +7,9 @@ from ..models import TrackInfo
 
 def build_library_stats(files: list[str], metadata_cache: dict[str, TrackInfo]) -> dict[str, object]:
     total = len(files)
-    total_duration = sum(float((metadata_cache.get(filename).duration if metadata_cache.get(filename) else 0) or 0) for filename in files)
+    total_duration = sum(
+        float((metadata_cache.get(filename).duration if metadata_cache.get(filename) else 0) or 0) for filename in files
+    )
     complete_count = 0
     genre_counter: Counter[str] = Counter()
     year_counter: Counter[str] = Counter()
@@ -47,7 +49,9 @@ def format_duration(seconds: float) -> str:
 
 def _is_complete(metadata: dict[str, str]) -> bool:
     required = ("title", "artist", "album", "year", "track_number")
-    return all(str(metadata.get(field, "") or "").strip() and str(metadata.get(field, "")).strip() != "0" for field in required)
+    return all(
+        str(metadata.get(field, "") or "").strip() and str(metadata.get(field, "")).strip() != "0" for field in required
+    )
 
 
 def _add_counter(counter: Counter[str], value) -> None:

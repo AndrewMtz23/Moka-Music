@@ -109,14 +109,24 @@ def manage_custom_themes(
         result = {"themes": themes, "reset_factory": False}
         modal.destroy()
 
-    ttk.Button(button_panel, text=translator("theme_manager.rename"), command=rename_selected).pack(fill="x", pady=(0, 8))
-    ttk.Button(button_panel, text=translator("theme_manager.duplicate"), command=duplicate_selected).pack(fill="x", pady=(0, 8))
-    ttk.Button(button_panel, text=translator("theme_manager.delete"), command=delete_selected, style="Secondary.TButton").pack(fill="x", pady=(0, 8))
-    ttk.Button(button_panel, text=translator("theme_manager.reset_factory"), command=reset_factory, style="Secondary.TButton").pack(fill="x")
+    ttk.Button(button_panel, text=translator("theme_manager.rename"), command=rename_selected).pack(
+        fill="x", pady=(0, 8)
+    )
+    ttk.Button(button_panel, text=translator("theme_manager.duplicate"), command=duplicate_selected).pack(
+        fill="x", pady=(0, 8)
+    )
+    ttk.Button(
+        button_panel, text=translator("theme_manager.delete"), command=delete_selected, style="Secondary.TButton"
+    ).pack(fill="x", pady=(0, 8))
+    ttk.Button(
+        button_panel, text=translator("theme_manager.reset_factory"), command=reset_factory, style="Secondary.TButton"
+    ).pack(fill="x")
 
     button_row = ttk.Frame(container)
     button_row.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(16, 0))
-    ttk.Button(button_row, text=translator("metadata_edit.cancel"), command=modal.destroy, style="Secondary.TButton").pack(side="right")
+    ttk.Button(
+        button_row, text=translator("metadata_edit.cancel"), command=modal.destroy, style="Secondary.TButton"
+    ).pack(side="right")
     ttk.Button(button_row, text=translator("theme_settings.save"), command=save).pack(side="right", padx=(0, 8))
 
     refresh_list()

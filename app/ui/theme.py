@@ -3,7 +3,6 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Dict
 
-
 ThemeMode = str
 DensityMode = str
 
@@ -322,7 +321,10 @@ class StyleManager:
         )
         self.style.map(
             "Secondary.TButton",
-            background=[("active", self._get_color("secondary_hover")), ("pressed", self._get_color("secondary_hover"))],
+            background=[
+                ("active", self._get_color("secondary_hover")),
+                ("pressed", self._get_color("secondary_hover")),
+            ],
             foreground=[("!disabled", self._get_color("secondary_text"))],
         )
 
@@ -524,7 +526,9 @@ class StyleManager:
             self.density = density if density in DENSITY_SETTINGS else "normal"
         if accent_color is not None:
             self.accent_color = accent_color.lower() if is_valid_hex_color(accent_color) else ""
-            base_palette = self.custom_theme_palettes.get(self.current_theme, THEME_PRESETS.get(self.current_theme, THEME_PRESETS["light"]))
+            base_palette = self.custom_theme_palettes.get(
+                self.current_theme, THEME_PRESETS.get(self.current_theme, THEME_PRESETS["light"])
+            )
             self.current_palette = palette_with_accent(base_palette, self.accent_color)
         self._setup_base_theme()
         self._apply_theme_colors()
