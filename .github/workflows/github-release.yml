@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_run:
+    workflows: ["Python CI"]
+    types: [completed]
 
 permissions:
   contents: write
@@ -11,12 +14,51 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
+    if: github.event_name == 'push' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Resolve release version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "push") {
+            $tag = "${{ github.ref_name }}"
+          } else {
+            $content = Get-Content app\constants.py -Raw
+            if ($content -notmatch 'VERSION:\s*Final\[str\]\s*=\s*"([^"]+)"') {
+              throw "Could not find VERSION in app/constants.py"
+            }
+            $tag = "v$($Matches[1])"
+          }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Check release tag
+        id: release_tag
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          git fetch --tags --quiet
+          if (git rev-parse -q --verify "refs/tags/$tag") {
+            "exists=true" >> $env:GITHUB_OUTPUT
+          } else {
+            "exists=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Create release tag
+        if: github.event_name == 'workflow_run' && steps.release_tag.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag ${{ steps.version.outputs.tag }}
+          git push origin ${{ steps.version.outputs.tag }}
 
       - name: Set up Python
+        if: github.event_name == 'push' || steps.release_tag.outputs.exists == 'false'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -26,32 +68,39 @@ jobs:
             requirements-dev.txt
 
       - name: Install dependencies
+        if: github.event_name == 'push' || steps.release_tag.outputs.exists == 'false'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
       - name: Lint
+        if: github.event_name == 'push' || steps.release_tag.outputs.exists == 'false'
         run: ruff check app tests tools
 
       - name: Format check
+        if: github.event_name == 'push' || steps.release_tag.outputs.exists == 'false'
         run: ruff format app tests tools --check
 
       - name: Tests
+        if: github.event_name == 'push' || steps.release_tag.outputs.exists == 'false'
         run: python -m unittest discover -s tests -p "test*.py"
 
       - name: Build Windows executable
+        if: github.event_name == 'push' || steps.release_tag.outputs.exists == 'false'
         run: pyinstaller MokaMusic.spec --noconfirm --clean
 
       - name: Package release
-        run: Compress-Archive -Path dist\MokaMusic -DestinationPath "MokaMusic-${{ github.ref_name }}-windows.zip" -Force
+        if: github.event_name == 'push' || steps.release_tag.outputs.exists == 'false'
+        run: Compress-Archive -Path dist\MokaMusic -DestinationPath "MokaMusic-${{ steps.version.outputs.tag }}-windows.zip" -Force
 
       - name: Create GitHub Release
+        if: github.event_name == 'push' || steps.release_tag.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          files: MokaMusic-${{ github.ref_name }}-windows.zip
-          tag_name: ${{ github.ref_name }}
-          name: MokaMusic ${{ github.ref_name }}
+          files: MokaMusic-${{ steps.version.outputs.tag }}-windows.zip
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: MokaMusic ${{ steps.version.outputs.tag }}
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
