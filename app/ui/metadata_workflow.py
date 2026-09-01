@@ -8,8 +8,6 @@ from typing import TYPE_CHECKING, Optional
 from ..controllers.backup_controller import BackupController
 from ..controllers.cleanup_controller import CleanupController
 from ..controllers.cleanup_preset_controller import CleanupPresetController
-from ..services.audio_audit_service import build_audio_quality_rows, detect_advanced_duplicates, validate_audio_files
-from ..services.audio_conversion_service import build_conversion_items, convert_audio_files
 from ..services.file_organization_service import (
     DEFAULT_ORGANIZE_TEMPLATE,
     DEFAULT_RENAME_TEMPLATE,
@@ -28,8 +26,6 @@ from ..services.metadata_tools_service import (
 )
 from ..services.playlist_export_service import export_library_report, export_library_view_json, export_playlist
 from ..utils.ui_formatting import metadata_label_key
-from ..views.modals.audio_audit_modal import show_audio_audit_modal
-from ..views.modals.audio_conversion_modal import request_audio_conversion_options
 from ..views.modals.backup_history_modal import show_backup_history_modal
 from ..views.modals.change_preview_modal import confirm_change_preview
 from ..views.modals.cleanup_preset_modal import show_cleanup_preset_modal
@@ -327,85 +323,14 @@ class MetadataWorkflowMixin:
             ]
         )
 
-    def _audio_tool_targets(self) -> list[tuple[MetadataController, object, list[str]]]:
-        selections = self._selected_filenames_by_controller()
-        if selections:
-            return selections
-        target = self._active_playlist_target()
-        if target is None:
-            return []
-        controller, tree = target
-        return [(controller, tree, controller.archivos.copy())]
-
     def _analyze_audio_quality(self) -> None:
-        groups = self._audio_tool_targets()
-        if not groups:
-            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
-            return
-        rows = build_audio_quality_rows(groups)
-        show_audio_audit_modal(
-            self.root,
-            self.t,
-            self.t("audio_tools.quality_title"),
-            rows,
-            [
-                ("filename", self.t("audio_tools.filename"), 260),
-                ("title", self.t("audio_tools.title"), 180),
-                ("artist", self.t("audio_tools.artist"), 160),
-                ("duration", self.t("audio_tools.duration"), 80),
-                ("bitrate_kbps", self.t("audio_tools.bitrate"), 90),
-                ("sample_rate", self.t("audio_tools.sample_rate"), 90),
-                ("channels", self.t("audio_tools.channels"), 80),
-                ("format", self.t("audio_tools.format"), 80),
-                ("low_bitrate", self.t("audio_tools.low_bitrate"), 90),
-                ("possibly_corrupt", self.t("audio_tools.corrupt"), 90),
-            ],
-        )
+        self.audio_tools_workflow.analyze_quality()
 
     def _detect_advanced_duplicates(self) -> None:
-        groups = self._audio_tool_targets()
-        if not groups:
-            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
-            return
-        rows = detect_advanced_duplicates(groups)
-        if not rows:
-            messagebox.showinfo(self.t("audio_tools.duplicates_title"), self.t("audio_tools.no_duplicates"))
-            return
-        show_audio_audit_modal(
-            self.root,
-            self.t,
-            self.t("audio_tools.duplicates_title"),
-            rows,
-            [
-                ("filename", self.t("audio_tools.filename"), 360),
-                ("title", self.t("audio_tools.title"), 180),
-                ("artist", self.t("audio_tools.artist"), 160),
-                ("duration", self.t("audio_tools.duration"), 130),
-                ("issue", self.t("audio_tools.issue"), 180),
-            ],
-        )
+        self.audio_tools_workflow.detect_duplicates()
 
     def _validate_audio_files(self) -> None:
-        groups = self._audio_tool_targets()
-        if not groups:
-            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
-            return
-        rows = validate_audio_files(groups)
-        if not rows:
-            messagebox.showinfo(self.t("audio_tools.validation_title"), self.t("audio_tools.no_validation_issues"))
-            return
-        show_audio_audit_modal(
-            self.root,
-            self.t,
-            self.t("audio_tools.validation_title"),
-            rows,
-            [
-                ("filename", self.t("audio_tools.filename"), 260),
-                ("path", self.t("audio_tools.path"), 360),
-                ("format", self.t("audio_tools.format"), 100),
-                ("issues", self.t("audio_tools.issues"), 220),
-            ],
-        )
+        self.audio_tools_workflow.validate_files()
 
     def _rename_files_by_template(self) -> None:
         target = self._active_playlist_target()
@@ -547,83 +472,7 @@ class MetadataWorkflowMixin:
         return controller.archivos.copy()
 
     def _convert_selected_audio(self) -> None:
-        selections = self._selected_filenames_by_controller()
-        if not selections:
-            messagebox.showwarning(self.t("dialog.selection"), self.t("audio_conversion.no_selection"))
-            return
-        source_groups: list[tuple[object, list[str]]] = []
-        for controller, _tree, filenames in selections:
-            source_groups.append((controller, [str(Path(controller.carpeta) / filename) for filename in filenames]))
-        sources = [source for _controller, group_sources in source_groups for source in group_sources]
-        options = request_audio_conversion_options(self.root, self.t, len(sources))
-        if not options:
-            return
-        try:
-            if bool(options.get("preserve_structure")):
-                items = []
-                for controller, group_sources in source_groups:
-                    items.extend(
-                        build_conversion_items(
-                            group_sources,
-                            str(options["destination"]),
-                            str(options["format"]),
-                            bitrate=options.get("bitrate"),
-                            preserve_structure=True,
-                            source_root=controller.carpeta,
-                        )
-                    )
-            else:
-                items = build_conversion_items(
-                    sources,
-                    str(options["destination"]),
-                    str(options["format"]),
-                    bitrate=options.get("bitrate"),
-                )
-        except Exception as exc:
-            messagebox.showerror(self.t("dialog.error"), self.t("audio_conversion.failed", error=exc))
-            return
-
-        progress = self._begin_progress(
-            title=self.t("audio_conversion.title"),
-            message=self.t("audio_conversion.progress"),
-            total=len(items),
-        )
-        try:
-            result = convert_audio_files(
-                items,
-                overwrite=bool(options.get("overwrite")),
-                progress_callback=progress.update,
-            )
-        except RuntimeError:
-            messagebox.showerror(self.t("dialog.error"), self.t("audio_conversion.ffmpeg_missing"))
-            return
-        except Exception as exc:
-            messagebox.showerror(self.t("dialog.error"), self.t("audio_conversion.failed", error=exc))
-            return
-        finally:
-            progress.close()
-
-        self._refresh_libraries_after_conversion(str(options["destination"]))
-        if result.errors:
-            self._show_toast(self.t("toast.partial"), kind="warning")
-            detail = self.t("audio_conversion.done_with_errors", count=result.converted, errors=len(result.errors))
-            detail += "\n\n" + "\n".join(result.errors[:5])
-            if len(result.errors) > 5:
-                detail += self.t("message.more_errors", count=len(result.errors) - 5)
-            messagebox.showwarning(self.t("audio_conversion.title"), detail)
-            return
-        self._show_toast(self.t("audio_conversion.done", count=result.converted), kind="success")
-        messagebox.showinfo(self.t("dialog.done"), self.t("audio_conversion.done", count=result.converted))
-
-    def _refresh_libraries_after_conversion(self, destination: str) -> None:
-        destination_path = Path(destination).resolve()
-        for controller, tree in (
-            (self.controller_principal, self.tree_principal),
-            (self.controller_nueva, self.tree_nueva),
-        ):
-            if controller.carpeta and Path(controller.carpeta).resolve() == destination_path:
-                controller.refresh_library()
-                self._refresh_library_tree(controller, tree)
+        self.audio_tools_workflow.convert_selected()
 
     def _create_metadata_backup_for_groups(
         self,

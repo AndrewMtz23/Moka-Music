@@ -24,11 +24,15 @@ from ..controllers.song_actions_controller import SongActions
 from ..controllers.ui_text_controller import UiTextController
 from ..controllers.undo_controller import UndoController
 from ..i18n import I18n
+from ..services.audio_audit_service import build_audio_quality_rows, detect_advanced_duplicates, validate_audio_files
+from ..services.audio_conversion_service import build_conversion_items, convert_audio_files
 from ..services.online_metadata_service import MusicBrainzClient
 from ..services.song_info_service import SongInfo
 from ..ui_helpers.file_dialogs import FileHandler
 from ..views.library_panel import build_library_panel
 from ..views.metadata_panel import build_metadata_panel
+from ..views.modals.audio_audit_modal import show_audio_audit_modal
+from ..views.modals.audio_conversion_modal import request_audio_conversion_options
 from ..views.modals.playlist_insert_preview_modal import request_playlist_insert_preview
 from ..views.modals.track_position_modal import request_track_position
 from ..views.player_panel import PlayerControls
@@ -39,6 +43,10 @@ from .library_workflow import LibraryWorkflowMixin
 from .metadata_workflow import MetadataWorkflowMixin
 from .theme import StyleManager
 from .workflows import (
+    AudioToolsLibraryPort,
+    AudioToolsOperations,
+    AudioToolsUiPort,
+    AudioToolsWorkflow,
     CoverLibraryPort,
     CoverUiPort,
     CoverWorkflow,
@@ -112,6 +120,7 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         self._setup_ui()
         self._setup_cover_workflow()
         self._setup_playlist_workflow()
+        self._setup_audio_tools_workflow()
         self._bind_events()
         self._load_config()
         self.root.after(200, self._show_first_run_welcome)
@@ -188,6 +197,45 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
             song_info=self.song_info,
             ui=ui,
             library=library,
+        )
+
+    def _setup_audio_tools_workflow(self) -> None:
+        ui = AudioToolsUiPort(
+            translate=self.t,
+            show_warning=messagebox.showwarning,
+            show_info=messagebox.showinfo,
+            show_error=messagebox.showerror,
+            show_audit=lambda title, rows, columns: show_audio_audit_modal(
+                self.root,
+                self.t,
+                title,
+                rows,
+                columns,
+            ),
+            request_conversion_options=lambda count: request_audio_conversion_options(self.root, self.t, count),
+            begin_progress=self._begin_progress,
+            show_toast=lambda message, kind: self._show_toast(message, kind=kind),
+        )
+        library = AudioToolsLibraryPort(
+            selected_targets=self._selected_filenames_by_controller,
+            active_target=self.playlist_workflow.active_target,
+            library_targets=lambda: [
+                (self.controller_principal, self.tree_principal),
+                (self.controller_nueva, self.tree_nueva),
+            ],
+            refresh_tree=self._refresh_library_tree,
+        )
+        operations = AudioToolsOperations(
+            build_quality_rows=build_audio_quality_rows,
+            detect_duplicates=detect_advanced_duplicates,
+            validate_files=validate_audio_files,
+            build_conversion_items=build_conversion_items,
+            convert_files=convert_audio_files,
+        )
+        self.audio_tools_workflow = AudioToolsWorkflow(
+            ui=ui,
+            library=library,
+            operations=operations,
         )
 
     def _setup_ui(self) -> None:
