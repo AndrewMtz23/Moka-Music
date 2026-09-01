@@ -1,7 +1,7 @@
 import logging
 import queue
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from typing import Optional
 
 from tkinterdnd2 import DND_FILES, TkinterDnD
@@ -24,11 +24,17 @@ from ..controllers.song_actions_controller import SongActions
 from ..controllers.ui_text_controller import UiTextController
 from ..controllers.undo_controller import UndoController
 from ..i18n import I18n
+from ..services.audio_audit_service import build_audio_quality_rows, detect_advanced_duplicates, validate_audio_files
+from ..services.audio_conversion_service import build_conversion_items, convert_audio_files
 from ..services.online_metadata_service import MusicBrainzClient
 from ..services.song_info_service import SongInfo
 from ..ui_helpers.file_dialogs import FileHandler
 from ..views.library_panel import build_library_panel
 from ..views.metadata_panel import build_metadata_panel
+from ..views.modals.audio_audit_modal import show_audio_audit_modal
+from ..views.modals.audio_conversion_modal import request_audio_conversion_options
+from ..views.modals.playlist_insert_preview_modal import request_playlist_insert_preview
+from ..views.modals.track_position_modal import request_track_position
 from ..views.player_panel import PlayerControls
 from ..views.preview_panel import PreviewPanel
 from .app_lifecycle import AppLifecycleMixin
@@ -36,6 +42,18 @@ from .interaction_workflow import InteractionWorkflowMixin
 from .library_workflow import LibraryWorkflowMixin
 from .metadata_workflow import MetadataWorkflowMixin
 from .theme import StyleManager
+from .workflows import (
+    AudioToolsLibraryPort,
+    AudioToolsOperations,
+    AudioToolsUiPort,
+    AudioToolsWorkflow,
+    CoverLibraryPort,
+    CoverUiPort,
+    CoverWorkflow,
+    PlaylistLibraryPort,
+    PlaylistUiPort,
+    PlaylistWorkflow,
+)
 
 
 class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixin, InteractionWorkflowMixin):
@@ -100,9 +118,125 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
 
         self._setup_main_menu()
         self._setup_ui()
+        self._setup_cover_workflow()
+        self._setup_playlist_workflow()
+        self._setup_audio_tools_workflow()
         self._bind_events()
         self._load_config()
         self.root.after(200, self._show_first_run_welcome)
+
+    def _setup_cover_workflow(self) -> None:
+        ui = CoverUiPort(
+            translate=self.t,
+            current_song=self.preview.get_current_song,
+            select_image=self.file_handler.seleccionar_imagen,
+            validate_image=self.file_handler.validar_imagen,
+            update_preview_cover=self.preview.update_cover_from_file,
+            split_drop_data=self.root.tk.splitlist,
+            show_warning=messagebox.showwarning,
+            ask_yes_no=messagebox.askyesno,
+            show_info=messagebox.showinfo,
+            show_error=messagebox.showerror,
+            begin_progress=self._begin_progress,
+            show_toast=lambda message, kind: self._show_toast(message, kind=kind),
+            log_drop_error=lambda exc: self.logger.error("Error handling cover drop: %s", exc),
+        )
+        library = CoverLibraryPort(
+            selected_targets=self._selected_filenames_by_controller,
+            preview_state=lambda: (self._preview_controller, self._preview_filename),
+            tree_for_controller=self._tree_for_controller,
+            create_backups=lambda groups, metadata: bool(self._create_metadata_backup_for_groups(groups, metadata)),
+            refresh_changed=self._refresh_changed_library_pairs,
+            reload_preview=self._load_song_preview,
+            record_undo=self._record_undo_action,
+        )
+        self.cover_workflow = CoverWorkflow(
+            cover_controller=self._cover_controller(),
+            drop_controller=self._drop_controller(),
+            song_info=self.song_info,
+            ui=ui,
+            library=library,
+        )
+
+    def _setup_playlist_workflow(self) -> None:
+        ui = PlaylistUiPort(
+            translate=self.t,
+            show_warning=messagebox.showwarning,
+            ask_yes_no=messagebox.askyesno,
+            show_info=messagebox.showinfo,
+            show_error=messagebox.showerror,
+            request_position=lambda **kwargs: request_track_position(self.root, self.t, **kwargs),
+            request_plan_preview=lambda plan, rebuild: request_playlist_insert_preview(
+                self.root,
+                self.t,
+                plan,
+                rebuild,
+            ),
+            begin_progress=self._begin_progress,
+            show_toast=lambda message, kind: self._show_toast(message, kind=kind),
+            present_action_result=self._handle_action_result,
+        )
+        library = PlaylistLibraryPort(
+            selected_targets=self._selected_filenames_by_controller,
+            preview_state=lambda: (self._preview_controller, self._preview_filename),
+            set_preview_filename=lambda filename: setattr(self, "_preview_filename", filename),
+            tree_for_controller=self._tree_for_controller,
+            primary_target=lambda: (self.controller_principal, self.tree_principal),
+            incoming_target=lambda: (self.controller_nueva, self.tree_nueva),
+            can_reorder=self._can_reorder_current_view,
+            create_backups=self._create_metadata_backup_for_groups,
+            refresh_tree=self._refresh_library_tree,
+            refresh_changed=self._refresh_changed_library_pairs,
+            sync_sort=self._set_sort_widget_for_controller,
+            select_filename=self._select_filename_in_tree,
+            reload_preview=self._load_song_preview,
+            record_undo_paths=self._record_undo_paths,
+        )
+        self.playlist_workflow = PlaylistWorkflow(
+            controller=self._playlist_workflow_controller(),
+            song_info=self.song_info,
+            ui=ui,
+            library=library,
+        )
+
+    def _setup_audio_tools_workflow(self) -> None:
+        ui = AudioToolsUiPort(
+            translate=self.t,
+            show_warning=messagebox.showwarning,
+            show_info=messagebox.showinfo,
+            show_error=messagebox.showerror,
+            show_audit=lambda title, rows, columns: show_audio_audit_modal(
+                self.root,
+                self.t,
+                title,
+                rows,
+                columns,
+            ),
+            request_conversion_options=lambda count: request_audio_conversion_options(self.root, self.t, count),
+            begin_progress=self._begin_progress,
+            show_toast=lambda message, kind: self._show_toast(message, kind=kind),
+        )
+        library = AudioToolsLibraryPort(
+            selected_targets=self._selected_filenames_by_controller,
+            active_target=self.playlist_workflow.active_target,
+            library_targets=lambda: [
+                (self.controller_principal, self.tree_principal),
+                (self.controller_nueva, self.tree_nueva),
+            ],
+            refresh_tree=self._refresh_library_tree,
+        )
+        operations = AudioToolsOperations(
+            build_quality_rows=build_audio_quality_rows,
+            detect_duplicates=detect_advanced_duplicates,
+            validate_files=validate_audio_files,
+            build_conversion_items=build_conversion_items,
+            convert_files=convert_audio_files,
+        )
+        self.audio_tools_workflow = AudioToolsWorkflow(
+            ui=ui,
+            library=library,
+            operations=operations,
+        )
 
     def _setup_ui(self) -> None:
         main_panel = ttk.Frame(self.root)

@@ -7,6 +7,7 @@ from app.controllers.metadata_controller import MetadataController
 from app.i18n import I18n
 from app.models import FilterMode, TrackInfo
 from app.ui import MokaMusicApp
+from app.ui.workflows import AudioToolsWorkflow
 
 
 class FakeFileHandler:
@@ -119,6 +120,62 @@ class FakeProgress:
 
     def close(self):
         self.closed = True
+
+
+class FakeCoverWorkflow:
+    def __init__(self):
+        self.calls = []
+
+    def select_preview_cover(self):
+        self.calls.append(("select",))
+
+    def handle_cover_drop(self, raw_data):
+        self.calls.append(("drop", raw_data))
+
+    def apply_cover(self, cover_path, targets=None, *, apply_entire_folder=True):
+        self.calls.append(("apply", cover_path, targets, apply_entire_folder))
+
+    def apply_auto_cover(self):
+        self.calls.append(("auto",))
+
+    def apply_auto_cover_targets(self, targets):
+        self.calls.append(("auto_targets", targets))
+
+
+class FakePlaylistWorkflow:
+    def __init__(self):
+        self.calls = []
+        self.target = object()
+
+    def number_tracks(self):
+        self.calls.append("number")
+
+    def insert_selected(self):
+        self.calls.append("insert")
+
+    def prepare_active(self):
+        self.calls.append("prepare")
+
+    def active_target(self):
+        self.calls.append("target")
+        return self.target
+
+
+class FakeAudioToolsWorkflow:
+    def __init__(self):
+        self.calls = []
+
+    def analyze_quality(self):
+        self.calls.append("quality")
+
+    def detect_duplicates(self):
+        self.calls.append("duplicates")
+
+    def validate_files(self):
+        self.calls.append("validate")
+
+    def convert_selected(self):
+        self.calls.append("convert")
 
 
 class UiLibraryRefreshTests(unittest.TestCase):
@@ -250,6 +307,78 @@ class UiLibraryRefreshTests(unittest.TestCase):
                 app._empty_library_message(filtered, panel),
                 "No hay canciones que coincidan con la busqueda o filtro actual.",
             )
+
+    def test_cover_compatibility_wrappers_delegate_exact_arguments(self):
+        app = self.make_app()
+        app.cover_workflow = FakeCoverWorkflow()
+        event = type("Event", (), {"data": "cover.png"})()
+        targets = [(app.controller_principal, app.tree_principal, ["song.mp3"])]
+
+        app._select_preview_cover()
+        app._handle_cover_drop(event)
+        app._apply_cover_to_targets("cover.png", targets=targets, apply_entire_folder=False)
+        app._apply_auto_cover_from_folder()
+        app._apply_auto_cover_targets(targets)
+
+        self.assertEqual(
+            app.cover_workflow.calls,
+            [
+                ("select",),
+                ("drop", "cover.png"),
+                ("apply", "cover.png", targets, False),
+                ("auto",),
+                ("auto_targets", targets),
+            ],
+        )
+
+    def test_apply_cover_compatibility_wrapper_delegates_selected_only_scope(self):
+        app = self.make_app()
+        app.cover_workflow = FakeCoverWorkflow()
+        targets = [(app.controller_principal, app.tree_principal, ["song.mp3"])]
+
+        app._apply_cover_to_targets("cover.png", targets=targets, apply_entire_folder=False)
+
+        self.assertEqual(app.cover_workflow.calls, [("apply", "cover.png", targets, False)])
+
+    def test_playlist_compatibility_wrappers_delegate_to_workflow(self):
+        app = self.make_app()
+        app.playlist_workflow = FakePlaylistWorkflow()
+
+        app._number_tracks_for_active_library()
+        app._insert_selected_at_position()
+        app._prepare_active_playlist()
+        target = app._active_playlist_target()
+
+        self.assertEqual(app.playlist_workflow.calls, ["number", "insert", "prepare", "target"])
+        self.assertIs(target, app.playlist_workflow.target)
+
+    def test_audio_tools_compatibility_wrappers_delegate_to_workflow(self):
+        app = self.make_app()
+        app.audio_tools_workflow = FakeAudioToolsWorkflow()
+
+        app._analyze_audio_quality()
+        app._detect_advanced_duplicates()
+        app._validate_audio_files()
+        app._convert_selected_audio()
+
+        self.assertEqual(
+            app.audio_tools_workflow.calls,
+            ["quality", "duplicates", "validate", "convert"],
+        )
+
+    def test_setup_audio_tools_workflow_wires_active_library_fallback(self):
+        app = self.make_app()
+        app.playlist_workflow = FakePlaylistWorkflow()
+        app.playlist_workflow.target = (app.controller_principal, app.tree_principal)
+        app.controller_principal.archivos = ["song.mp3"]
+
+        app._setup_audio_tools_workflow()
+
+        self.assertIsInstance(app.audio_tools_workflow, AudioToolsWorkflow)
+        self.assertEqual(
+            app.audio_tools_workflow.targets(),
+            [(app.controller_principal, app.tree_principal, ["song.mp3"])],
+        )
 
     def test_cleanup_presets_are_normalized_to_known_actions(self):
         app = self.make_app()
