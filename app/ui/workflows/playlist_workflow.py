@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional, Protocol
@@ -94,3 +95,47 @@ class PlaylistWorkflow:
         if primary[0].archivos:
             return primary
         return None
+
+    def number_tracks(self) -> None:
+        controller, tree = self._numbering_target()
+        if tree is None or not controller.archivos:
+            self.ui.show_warning(
+                self.ui.translate("dialog.no_files"),
+                self.ui.translate("message.no_loaded_files"),
+            )
+            return
+        if not self.library.can_reorder(controller, tree):
+            self.ui.show_warning(
+                self.ui.translate("dialog.selection"),
+                self.ui.translate("message.reorder_needs_full_view"),
+            )
+            return
+        if not self.ui.ask_yes_no(
+            self.ui.translate("dialog.confirm"),
+            self.ui.translate("quick_actions.confirm_number_tracks", count=len(controller.archivos)),
+        ):
+            return
+        if not self.library.create_backups(
+            [(controller, tree, controller.archivos.copy())],
+            {"track_number": "order"},
+        ):
+            return
+
+        result = controller.apply_track_numbers_from_order()
+        if result.success:
+            for filename in controller.archivos:
+                self.song_info.invalidate(os.path.join(controller.carpeta, filename))
+            self.library.refresh_tree(controller, tree)
+            preview_controller, preview_filename = self.library.preview_state()
+            if preview_controller is controller and preview_filename:
+                self.library.reload_preview(controller, preview_filename)
+        self.ui.present_action_result(result)
+
+    def _numbering_target(self) -> PlaylistTarget:
+        preview_controller, _preview_filename = self.library.preview_state()
+        if preview_controller is not None:
+            return preview_controller, self.library.tree_for_controller(preview_controller)
+        primary = self.library.primary_target()
+        if primary[0].archivos:
+            return primary
+        return self.library.incoming_target()

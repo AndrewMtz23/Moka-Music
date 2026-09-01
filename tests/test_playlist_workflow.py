@@ -1,8 +1,11 @@
+import os
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+from app.models import ActionResult
 from app.ui.workflows.playlist_workflow import PlaylistLibraryPort, PlaylistUiPort, PlaylistWorkflow
 
 
@@ -99,6 +102,72 @@ class PlaylistWorkflowTests(unittest.TestCase):
 
         self.preview_state[0] = None
         self.assertEqual(self.workflow.active_target(), (self.incoming, self.incoming_tree))
+
+    def test_number_tracks_warns_when_no_library_has_files(self):
+        self.primary.archivos = []
+        self.incoming.archivos = []
+
+        self.workflow.number_tracks()
+
+        self.assertEqual(self.warnings, [("dialog.no_files", "message.no_loaded_files")])
+        self.primary.apply_track_numbers_from_order.assert_not_called()
+
+    def test_number_tracks_rejects_a_view_that_cannot_be_reordered(self):
+        self.library = replace(self.library, can_reorder=lambda _controller, _tree: False)
+        self.workflow = PlaylistWorkflow(
+            controller=self.controller,
+            song_info=self.song_info,
+            ui=self.ui,
+            library=self.library,
+        )
+
+        self.workflow.number_tracks()
+
+        self.assertEqual(self.warnings, [("dialog.selection", "message.reorder_needs_full_view")])
+        self.primary.apply_track_numbers_from_order.assert_not_called()
+
+    def test_number_tracks_declined_confirmation_stops_before_backup(self):
+        self.ui = replace(self.ui, ask_yes_no=lambda _title, _body: False)
+        self.workflow = PlaylistWorkflow(
+            controller=self.controller,
+            song_info=self.song_info,
+            ui=self.ui,
+            library=self.library,
+        )
+
+        self.workflow.number_tracks()
+
+        self.library.create_backups.assert_not_called()
+        self.primary.apply_track_numbers_from_order.assert_not_called()
+
+    def test_number_tracks_backup_failure_stops_before_mutation(self):
+        self.library = replace(self.library, create_backups=Mock(return_value=None))
+        self.workflow = PlaylistWorkflow(
+            controller=self.controller,
+            song_info=self.song_info,
+            ui=self.ui,
+            library=self.library,
+        )
+
+        self.workflow.number_tracks()
+
+        self.primary.apply_track_numbers_from_order.assert_not_called()
+
+    def test_number_tracks_success_invalidates_refreshes_preview_and_presents_result(self):
+        result = ActionResult.ok("done")
+        self.primary.apply_track_numbers_from_order.return_value = result
+        self.preview_state[:] = [self.primary, "primary.mp3"]
+
+        self.workflow.number_tracks()
+
+        self.library.create_backups.assert_called_once_with(
+            [(self.primary, self.primary_tree, ["primary.mp3"])],
+            {"track_number": "order"},
+        )
+        self.song_info.invalidate.assert_called_once_with(os.path.join("primary", "primary.mp3"))
+        self.library.refresh_tree.assert_called_once_with(self.primary, self.primary_tree)
+        self.library.reload_preview.assert_called_once_with(self.primary, "primary.mp3")
+        self.ui.present_action_result.assert_called_once_with(result)
 
 
 if __name__ == "__main__":
