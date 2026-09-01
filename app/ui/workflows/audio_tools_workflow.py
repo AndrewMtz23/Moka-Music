@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Callable, Protocol
 
 from ...services.audio_conversion_service import AudioConversionItem, AudioConversionResult
@@ -71,3 +70,75 @@ class AudioToolsWorkflow:
             return []
         controller, tree = target
         return [(controller, tree, controller.archivos.copy())]
+
+    def analyze_quality(self) -> None:
+        groups = self._require_targets()
+        if not groups:
+            return
+        rows = self.operations.build_quality_rows(groups)
+        self.ui.show_audit(
+            self.ui.translate("audio_tools.quality_title"),
+            rows,
+            [
+                ("filename", self.ui.translate("audio_tools.filename"), 260),
+                ("title", self.ui.translate("audio_tools.title"), 180),
+                ("artist", self.ui.translate("audio_tools.artist"), 160),
+                ("duration", self.ui.translate("audio_tools.duration"), 80),
+                ("bitrate_kbps", self.ui.translate("audio_tools.bitrate"), 90),
+                ("sample_rate", self.ui.translate("audio_tools.sample_rate"), 90),
+                ("channels", self.ui.translate("audio_tools.channels"), 80),
+                ("format", self.ui.translate("audio_tools.format"), 80),
+                ("low_bitrate", self.ui.translate("audio_tools.low_bitrate"), 90),
+                ("possibly_corrupt", self.ui.translate("audio_tools.corrupt"), 90),
+            ],
+        )
+
+    def detect_duplicates(self) -> None:
+        groups = self._require_targets()
+        if not groups:
+            return
+        rows = self.operations.detect_duplicates(groups)
+        title = self.ui.translate("audio_tools.duplicates_title")
+        if not rows:
+            self.ui.show_info(title, self.ui.translate("audio_tools.no_duplicates"))
+            return
+        self.ui.show_audit(
+            title,
+            rows,
+            [
+                ("filename", self.ui.translate("audio_tools.filename"), 360),
+                ("title", self.ui.translate("audio_tools.title"), 180),
+                ("artist", self.ui.translate("audio_tools.artist"), 160),
+                ("duration", self.ui.translate("audio_tools.duration"), 130),
+                ("issue", self.ui.translate("audio_tools.issue"), 180),
+            ],
+        )
+
+    def validate_files(self) -> None:
+        groups = self._require_targets()
+        if not groups:
+            return
+        rows = self.operations.validate_files(groups)
+        title = self.ui.translate("audio_tools.validation_title")
+        if not rows:
+            self.ui.show_info(title, self.ui.translate("audio_tools.no_validation_issues"))
+            return
+        self.ui.show_audit(
+            title,
+            rows,
+            [
+                ("filename", self.ui.translate("audio_tools.filename"), 260),
+                ("path", self.ui.translate("audio_tools.path"), 360),
+                ("format", self.ui.translate("audio_tools.format"), 100),
+                ("issues", self.ui.translate("audio_tools.issues"), 220),
+            ],
+        )
+
+    def _require_targets(self) -> list[AudioTarget]:
+        groups = self.targets()
+        if not groups:
+            self.ui.show_warning(
+                self.ui.translate("dialog.no_files"),
+                self.ui.translate("message.no_loaded_files"),
+            )
+        return groups

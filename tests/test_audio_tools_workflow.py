@@ -102,3 +102,89 @@ def test_targets_fall_back_to_all_files_in_active_library() -> None:
 
     assert harness.workflow.targets() == [(active_controller, "active-tree", ["one.mp3", "two.flac"])]
     assert harness.workflow.targets()[0][2] is not active_controller.archivos
+
+
+def test_analyze_quality_warns_when_no_target_exists() -> None:
+    harness = Harness()
+
+    harness.workflow.analyze_quality()
+
+    assert harness.events == [("warning", "dialog.no_files", "message.no_loaded_files")]
+
+
+def test_analyze_quality_builds_rows_and_preserves_column_schema() -> None:
+    harness = Harness()
+    group = (controller("music", ["song.mp3"]), "tree", ["song.mp3"])
+    harness.selections = [group]
+    harness.quality_rows = [{"filename": "song.mp3", "bitrate_kbps": 128}]
+
+    harness.workflow.analyze_quality()
+
+    event = harness.events[-1]
+    assert event[:3] == ("audit", "audio_tools.quality_title", harness.quality_rows)
+    assert [column[0] for column in event[3]] == [
+        "filename",
+        "title",
+        "artist",
+        "duration",
+        "bitrate_kbps",
+        "sample_rate",
+        "channels",
+        "format",
+        "low_bitrate",
+        "possibly_corrupt",
+    ]
+    assert [column[2] for column in event[3]] == [260, 180, 160, 80, 90, 90, 80, 80, 90, 90]
+
+
+def test_duplicate_audit_reports_empty_result_without_opening_modal() -> None:
+    harness = Harness()
+    harness.selections = [(controller("music", ["song.mp3"]), "tree", ["song.mp3"])]
+
+    harness.workflow.detect_duplicates()
+
+    assert harness.events == [("info", "audio_tools.duplicates_title", "audio_tools.no_duplicates")]
+
+
+def test_duplicate_audit_opens_modal_with_existing_schema() -> None:
+    harness = Harness()
+    harness.selections = [(controller("music", ["a.mp3"]), "tree", ["a.mp3"])]
+    harness.duplicate_rows = [{"filename": "a.mp3", "issue": "same"}]
+
+    harness.workflow.detect_duplicates()
+
+    event = harness.events[-1]
+    assert event[:3] == ("audit", "audio_tools.duplicates_title", harness.duplicate_rows)
+    assert event[3] == [
+        ("filename", "audio_tools.filename", 360),
+        ("title", "audio_tools.title", 180),
+        ("artist", "audio_tools.artist", 160),
+        ("duration", "audio_tools.duration", 130),
+        ("issue", "audio_tools.issue", 180),
+    ]
+
+
+def test_validation_reports_empty_result_without_opening_modal() -> None:
+    harness = Harness()
+    harness.selections = [(controller("music", ["song.mp3"]), "tree", ["song.mp3"])]
+
+    harness.workflow.validate_files()
+
+    assert harness.events == [("info", "audio_tools.validation_title", "audio_tools.no_validation_issues")]
+
+
+def test_validation_opens_modal_with_existing_schema() -> None:
+    harness = Harness()
+    harness.selections = [(controller("music", ["bad.mp3"]), "tree", ["bad.mp3"])]
+    harness.validation_rows = [{"filename": "bad.mp3", "issues": "broken"}]
+
+    harness.workflow.validate_files()
+
+    event = harness.events[-1]
+    assert event[:3] == ("audit", "audio_tools.validation_title", harness.validation_rows)
+    assert event[3] == [
+        ("filename", "audio_tools.filename", 260),
+        ("path", "audio_tools.path", 360),
+        ("format", "audio_tools.format", 100),
+        ("issues", "audio_tools.issues", 220),
+    ]
