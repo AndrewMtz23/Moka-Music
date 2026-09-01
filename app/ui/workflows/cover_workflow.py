@@ -195,3 +195,60 @@ class CoverWorkflow:
             self.ui.translate("dialog.error"),
             "\n".join(errors) if errors else self.ui.translate("message.could_not_apply_metadata"),
         )
+
+    def apply_auto_cover(self) -> None:
+        targets = self.targets()
+        if not targets:
+            self.ui.show_warning(self.ui.translate("dialog.selection"), self.ui.translate("message.no_cover_target"))
+            return
+        self.apply_auto_cover_targets(targets)
+
+    def apply_auto_cover_targets(self, targets: list[CoverTarget]) -> None:
+        cover_plan = self.cover_controller.build_auto_cover_plan(targets)
+        if not cover_plan.groups:
+            self.ui.show_warning(self.ui.translate("dialog.cover_selected"), self.ui.translate("auto_cover.not_found"))
+            return
+        message = self.ui.translate(
+            "auto_cover.confirm",
+            count=cover_plan.planned_count,
+            covers=len(cover_plan.groups),
+        )
+        if cover_plan.missing:
+            message += self.ui.translate("auto_cover.missing_count", count=len(cover_plan.missing))
+        if not self.ui.ask_yes_no(self.ui.translate("dialog.confirm"), message):
+            return
+        backup_groups = [
+            (controller, tree, filenames)
+            for controller, tree, filenames, _cover_path in cover_plan.groups
+        ]
+        if not self.library.create_backups(backup_groups, {"__cover__": "auto"}):
+            return
+        self._apply_auto_cover_plan(cover_plan.groups, backup_groups, cover_plan.planned_count)
+
+    def _apply_auto_cover_plan(
+        self,
+        groups: list[tuple[object, object, list[str], str]],
+        backup_groups: list[CoverTarget],
+        planned_count: int,
+    ) -> None:
+        progress = self.ui.begin_progress(
+            title=self.ui.translate("progress.cover_title"),
+            message=self.ui.translate("progress.cover_body"),
+            total=planned_count,
+        )
+        preview_controller, preview_filename = self.library.preview_state()
+        try:
+            result = self.cover_controller.apply_cover_plan(
+                groups,
+                song_info=self.song_info,
+                preview_controller=preview_controller,
+                preview_filename=preview_filename,
+                progress_callback=progress.update,
+            )
+        finally:
+            progress.close()
+        if result.preview_cover_path:
+            self.ui.update_preview_cover(result.preview_cover_path)
+        self.library.refresh_changed(backup_groups, result.changed_pairs)
+        self._refresh_preview(result.affected_preview)
+        self._present_result(result.success_count, result.errors, "auto_cover.done")

@@ -222,6 +222,64 @@ class CoverWorkflowTests(unittest.TestCase):
 
         self.assertTrue(self.progress.closed)
 
+    def test_auto_cover_warns_without_targets(self):
+        self.cover_controller.cover_targets.return_value = []
+
+        self.workflow.apply_auto_cover()
+
+        self.assertEqual(self.warnings, [("dialog.selection", "message.no_cover_target")])
+
+    def test_auto_cover_warns_when_plan_has_no_groups(self):
+        self.cover_controller.build_auto_cover_plan.return_value = CoverPlan(groups=[], missing=["song.mp3"])
+
+        self.workflow.apply_auto_cover_targets([(self.controller, self.tree, ["song.mp3"])])
+
+        self.assertEqual(self.warnings, [("dialog.cover_selected", "auto_cover.not_found")])
+        self.assertEqual(self.backups, [])
+
+    def test_auto_cover_confirmation_includes_missing_count_and_can_decline(self):
+        self.cover_controller.build_auto_cover_plan.return_value = CoverPlan(
+            groups=[(self.controller, self.tree, ["song.mp3"], "cover.jpg")],
+            missing=["other.mp3"],
+        )
+        self.confirmed = False
+
+        self.workflow.apply_auto_cover_targets([(self.controller, self.tree, ["song.mp3", "other.mp3"])])
+
+        self.assertEqual(self.backups, [])
+        self.cover_controller.apply_cover_plan.assert_not_called()
+
+    def test_auto_cover_success_updates_preview_refreshes_and_reports_success(self):
+        groups = [(self.controller, self.tree, ["song.mp3"], "cover.jpg")]
+        self.cover_controller.build_auto_cover_plan.return_value = CoverPlan(groups=groups)
+        result = CoverApplyResult(
+            success_count=1,
+            errors=[],
+            affected_preview=True,
+            changed_pairs={(id(self.controller), id(self.tree))},
+            preview_cover_path="cover.jpg",
+        )
+        self.cover_controller.apply_cover_plan.return_value = result
+
+        self.workflow.apply_auto_cover_targets([(self.controller, self.tree, ["song.mp3"])])
+
+        self.ui.update_preview_cover.assert_called_once_with("cover.jpg")
+        self.assertEqual(self.refreshes[0][1], result.changed_pairs)
+        self.assertEqual(self.reloads, [(self.controller, "song.mp3")])
+        self.assertEqual(self.undo, ["undo.cover"])
+        self.assertEqual(self.toasts, [("toast.done", "success")])
+        self.assertTrue(self.progress.closed)
+
+    def test_auto_cover_closes_progress_when_controller_raises(self):
+        groups = [(self.controller, self.tree, ["song.mp3"], "cover.jpg")]
+        self.cover_controller.build_auto_cover_plan.return_value = CoverPlan(groups=groups)
+        self.cover_controller.apply_cover_plan.side_effect = RuntimeError("write failed")
+
+        with self.assertRaisesRegex(RuntimeError, "write failed"):
+            self.workflow.apply_auto_cover_targets([(self.controller, self.tree, ["song.mp3"])])
+
+        self.assertTrue(self.progress.closed)
+
 
 if __name__ == "__main__":
     unittest.main()
