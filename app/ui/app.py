@@ -29,6 +29,8 @@ from ..services.song_info_service import SongInfo
 from ..ui_helpers.file_dialogs import FileHandler
 from ..views.library_panel import build_library_panel
 from ..views.metadata_panel import build_metadata_panel
+from ..views.modals.playlist_insert_preview_modal import request_playlist_insert_preview
+from ..views.modals.track_position_modal import request_track_position
 from ..views.player_panel import PlayerControls
 from ..views.preview_panel import PreviewPanel
 from .app_lifecycle import AppLifecycleMixin
@@ -36,7 +38,14 @@ from .interaction_workflow import InteractionWorkflowMixin
 from .library_workflow import LibraryWorkflowMixin
 from .metadata_workflow import MetadataWorkflowMixin
 from .theme import StyleManager
-from .workflows import CoverLibraryPort, CoverUiPort, CoverWorkflow
+from .workflows import (
+    CoverLibraryPort,
+    CoverUiPort,
+    CoverWorkflow,
+    PlaylistLibraryPort,
+    PlaylistUiPort,
+    PlaylistWorkflow,
+)
 
 
 class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixin, InteractionWorkflowMixin):
@@ -102,6 +111,7 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         self._setup_main_menu()
         self._setup_ui()
         self._setup_cover_workflow()
+        self._setup_playlist_workflow()
         self._bind_events()
         self._load_config()
         self.root.after(200, self._show_first_run_welcome)
@@ -134,6 +144,47 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         self.cover_workflow = CoverWorkflow(
             cover_controller=self._cover_controller(),
             drop_controller=self._drop_controller(),
+            song_info=self.song_info,
+            ui=ui,
+            library=library,
+        )
+
+    def _setup_playlist_workflow(self) -> None:
+        ui = PlaylistUiPort(
+            translate=self.t,
+            show_warning=messagebox.showwarning,
+            ask_yes_no=messagebox.askyesno,
+            show_info=messagebox.showinfo,
+            show_error=messagebox.showerror,
+            request_position=lambda **kwargs: request_track_position(self.root, self.t, **kwargs),
+            request_plan_preview=lambda plan, rebuild: request_playlist_insert_preview(
+                self.root,
+                self.t,
+                plan,
+                rebuild,
+            ),
+            begin_progress=self._begin_progress,
+            show_toast=lambda message, kind: self._show_toast(message, kind=kind),
+            present_action_result=self._handle_action_result,
+        )
+        library = PlaylistLibraryPort(
+            selected_targets=self._selected_filenames_by_controller,
+            preview_state=lambda: (self._preview_controller, self._preview_filename),
+            set_preview_filename=lambda filename: setattr(self, "_preview_filename", filename),
+            tree_for_controller=self._tree_for_controller,
+            primary_target=lambda: (self.controller_principal, self.tree_principal),
+            incoming_target=lambda: (self.controller_nueva, self.tree_nueva),
+            can_reorder=self._can_reorder_current_view,
+            create_backups=self._create_metadata_backup_for_groups,
+            refresh_tree=self._refresh_library_tree,
+            refresh_changed=self._refresh_changed_library_pairs,
+            sync_sort=self._set_sort_widget_for_controller,
+            select_filename=self._select_filename_in_tree,
+            reload_preview=self._load_song_preview,
+            record_undo_paths=self._record_undo_paths,
+        )
+        self.playlist_workflow = PlaylistWorkflow(
+            controller=self._playlist_workflow_controller(),
             song_info=self.song_info,
             ui=ui,
             library=library,

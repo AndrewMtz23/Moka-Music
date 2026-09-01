@@ -141,6 +141,25 @@ class FakeCoverWorkflow:
         self.calls.append(("auto_targets", targets))
 
 
+class FakePlaylistWorkflow:
+    def __init__(self):
+        self.calls = []
+        self.target = object()
+
+    def number_tracks(self):
+        self.calls.append("number")
+
+    def insert_selected(self):
+        self.calls.append("insert")
+
+    def prepare_active(self):
+        self.calls.append("prepare")
+
+    def active_target(self):
+        self.calls.append("target")
+        return self.target
+
+
 class UiLibraryRefreshTests(unittest.TestCase):
     def make_app(self, main_controller=None, incoming_controller=None, main_tree=None, incoming_tree=None):
         app = MokaMusicApp.__new__(MokaMusicApp)
@@ -302,6 +321,18 @@ class UiLibraryRefreshTests(unittest.TestCase):
         app._apply_cover_to_targets("cover.png", targets=targets, apply_entire_folder=False)
 
         self.assertEqual(app.cover_workflow.calls, [("apply", "cover.png", targets, False)])
+
+    def test_playlist_compatibility_wrappers_delegate_to_workflow(self):
+        app = self.make_app()
+        app.playlist_workflow = FakePlaylistWorkflow()
+
+        app._number_tracks_for_active_library()
+        app._insert_selected_at_position()
+        app._prepare_active_playlist()
+        target = app._active_playlist_target()
+
+        self.assertEqual(app.playlist_workflow.calls, ["number", "insert", "prepare", "target"])
+        self.assertIs(target, app.playlist_workflow.target)
 
     def test_cleanup_presets_are_normalized_to_known_actions(self):
         app = self.make_app()

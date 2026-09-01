@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Optional
 from ..controllers.backup_controller import BackupController
 from ..controllers.cleanup_controller import CleanupController
 from ..controllers.cleanup_preset_controller import CleanupPresetController
-from ..models import SortMode
 from ..services.audio_audit_service import build_audio_quality_rows, detect_advanced_duplicates, validate_audio_files
 from ..services.audio_conversion_service import build_conversion_items, convert_audio_files
 from ..services.file_organization_service import (
@@ -38,10 +37,8 @@ from ..views.modals.clear_metadata_modal import KEEP_FIELDS_KEY
 from ..views.modals.file_plan_preview_modal import confirm_file_plan_preview, show_playlist_validation_modal
 from ..views.modals.metadata_import_preview_modal import confirm_metadata_import
 from ..views.modals.online_metadata_modal import request_online_metadata_selection
-from ..views.modals.playlist_insert_preview_modal import request_playlist_insert_preview
 from ..views.modals.rename_metadata_modal import confirm_rename_metadata
 from ..views.modals.search_replace_metadata_modal import request_search_replace_metadata
-from ..views.modals.track_position_modal import request_track_position
 
 if TYPE_CHECKING:
     from ..controllers.metadata_controller import MetadataController
@@ -1223,225 +1220,16 @@ class MetadataWorkflowMixin:
         return confirm_change_preview(self.root, self.t, changes)
 
     def _number_tracks_for_active_library(self) -> None:
-        controller = self._preview_controller or (
-            self.controller_principal if self.controller_principal.archivos else self.controller_nueva
-        )
-        tree = self._tree_for_controller(controller)
-        if tree is None or not controller.archivos:
-            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
-            return
-        if not self._can_reorder_current_view(controller, tree):
-            messagebox.showwarning(self.t("dialog.selection"), self.t("message.reorder_needs_full_view"))
-            return
-        if not messagebox.askyesno(
-            self.t("dialog.confirm"),
-            self.t("quick_actions.confirm_number_tracks", count=len(controller.archivos)),
-        ):
-            return
-        if not self._create_metadata_backup_for_groups(
-            [(controller, tree, controller.archivos.copy())],
-            {"track_number": "order"},
-        ):
-            return
-        result = controller.apply_track_numbers_from_order()
-        if result.success:
-            for filename in controller.archivos:
-                self.song_info.invalidate(os.path.join(controller.carpeta, filename))
-            self._refresh_library_tree(controller, tree)
-            if self._preview_controller is controller and self._preview_filename:
-                self._load_song_preview(controller, self._preview_filename)
-        self._handle_action_result(result)
+        self.playlist_workflow.number_tracks()
 
     def _insert_selected_at_position(self) -> None:
-        selections = self._selected_filenames_by_controller()
-        if not selections:
-            messagebox.showwarning(self.t("dialog.selection"), self.t("message.no_song_selected"))
-            return
-        if len(selections) > 1:
-            messagebox.showwarning(self.t("dialog.selection"), self.t("playlist_insert.one_library"))
-            return
-
-        controller, tree, filenames = selections[0]
-        if not controller.archivos:
-            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
-            return
-        if not self._can_reorder_current_view(controller, tree):
-            messagebox.showwarning(self.t("dialog.selection"), self.t("message.reorder_needs_full_view"))
-            return
-
-        position = request_track_position(
-            self.root,
-            self.t,
-            title=self.t("playlist_insert.title"),
-            prompt=self.t("playlist_insert.prompt", count=len(filenames), total=len(controller.archivos)),
-            total=len(controller.archivos),
-            initial=0,
-            min_position=0,
-            max_position=max(0, len(controller.archivos) - 1),
-            confirm_text=self.t("playlist_insert.confirm_position"),
-        )
-        if position is None:
-            return
-
-        plan = self._playlist_workflow_controller().build_insert_plan(
-            controller=controller,
-            tree=tree,
-            filenames=filenames,
-            position=position + 1,
-        )
-        if not plan.items:
-            messagebox.showinfo(self.t("dialog.done"), self.t("change_preview.no_changes"))
-            return
-        confirmed_plan = request_playlist_insert_preview(
-            self.root,
-            self.t,
-            plan,
-            lambda final_order: self._playlist_workflow_controller().build_plan_from_order(
-                controller=controller,
-                tree=tree,
-                final_order=final_order,
-            ),
-        )
-        if confirmed_plan is None:
-            return
-        plan = confirmed_plan
-
-        progress = self._begin_progress(
-            title=self.t("progress.playlist_title"),
-            message=self.t("progress.playlist_body"),
-            total=len(plan.items) * 2,
-        )
-        try:
-            result = self._playlist_workflow_controller().execute_plan(
-                plan,
-                song_info=self.song_info,
-                preview_controller=self._preview_controller,
-                preview_filename=self._preview_filename,
-                progress_callback=progress.update,
-            )
-        finally:
-            progress.close()
-        self._preview_filename = result.preview_filename
-        self._refresh_changed_library_pairs([(controller, tree, plan.final_order)], result.changed_pairs)
-        controller.set_sort_mode(SortMode.TRACK_NUMBER)
-        self._set_sort_widget_for_controller(controller, SortMode.TRACK_NUMBER)
-
-        if self._preview_controller is controller and self._preview_filename:
-            self._select_filename_in_tree(tree, self._preview_filename)
-            self._load_song_preview(controller, self._preview_filename)
-
-        if result.success:
-            if result.backup_path:
-                self._record_undo_paths("undo.playlist", [result.backup_path])
-            message = self.t(
-                "playlist_insert.done",
-                tracks=result.track_numbers_updated,
-                renamed=result.renamed,
-            )
-            if result.backup_path:
-                message += f"\n{self.t('message.backup_created', path=result.backup_path)}"
-            self._show_toast(self.t("toast.done"), kind="success")
-            messagebox.showinfo(self.t("dialog.done"), message)
-            return
-
-        messagebox.showerror(
-            self.t("dialog.error"),
-            "\n".join(result.errors) if result.errors else self.t("message.could_not_apply_metadata"),
-        )
+        self.playlist_workflow.insert_selected()
 
     def _prepare_active_playlist(self) -> None:
-        target = self._active_playlist_target()
-        if target is None:
-            messagebox.showwarning(self.t("dialog.no_files"), self.t("message.no_loaded_files"))
-            return
-
-        controller, tree = target
-        if not self._can_reorder_current_view(controller, tree):
-            messagebox.showwarning(self.t("dialog.selection"), self.t("message.reorder_needs_full_view"))
-            return
-
-        plan = self._playlist_workflow_controller().build_plan_from_order(
-            controller=controller,
-            tree=tree,
-            final_order=controller.archivos.copy(),
-        )
-        if not plan.items:
-            messagebox.showinfo(self.t("dialog.done"), self.t("change_preview.no_changes"))
-            return
-        confirmed_plan = request_playlist_insert_preview(
-            self.root,
-            self.t,
-            plan,
-            lambda final_order: self._playlist_workflow_controller().build_plan_from_order(
-                controller=controller,
-                tree=tree,
-                final_order=final_order,
-            ),
-        )
-        if confirmed_plan is None:
-            return
-        plan = confirmed_plan
-
-        progress = self._begin_progress(
-            title=self.t("progress.playlist_title"),
-            message=self.t("progress.playlist_body"),
-            total=len(plan.items) * 2,
-        )
-        try:
-            result = self._playlist_workflow_controller().execute_plan(
-                plan,
-                song_info=self.song_info,
-                preview_controller=self._preview_controller,
-                preview_filename=self._preview_filename,
-                progress_callback=progress.update,
-            )
-        finally:
-            progress.close()
-        self._preview_filename = result.preview_filename
-        self._refresh_changed_library_pairs([(controller, tree, plan.final_order)], result.changed_pairs)
-        controller.set_sort_mode(SortMode.TRACK_NUMBER)
-        self._set_sort_widget_for_controller(controller, SortMode.TRACK_NUMBER)
-
-        if self._preview_controller is controller and self._preview_filename:
-            self._select_filename_in_tree(tree, self._preview_filename)
-            self._load_song_preview(controller, self._preview_filename)
-
-        if result.success:
-            if result.backup_path:
-                self._record_undo_paths("undo.playlist", [result.backup_path])
-            message = self.t(
-                "playlist_prepare.done",
-                tracks=result.track_numbers_updated,
-                renamed=result.renamed,
-            )
-            if result.backup_path:
-                message += f"\n{self.t('message.backup_created', path=result.backup_path)}"
-            self._show_toast(self.t("toast.done"), kind="success")
-            messagebox.showinfo(self.t("dialog.done"), message)
-            return
-
-        messagebox.showerror(
-            self.t("dialog.error"),
-            "\n".join(result.errors) if result.errors else self.t("message.could_not_apply_metadata"),
-        )
+        self.playlist_workflow.prepare_active()
 
     def _active_playlist_target(self):
-        selections = self._selected_filenames_by_controller()
-        if len(selections) > 1:
-            messagebox.showwarning(self.t("dialog.selection"), self.t("playlist_insert.one_library"))
-            return None
-        if selections:
-            controller, tree, _filenames = selections[0]
-            return controller, tree
-        if self._preview_controller is not None and self._preview_controller.archivos:
-            tree = self._tree_for_controller(self._preview_controller)
-            if tree is not None:
-                return self._preview_controller, tree
-        if self.controller_nueva.archivos:
-            return self.controller_nueva, self.tree_nueva
-        if self.controller_principal.archivos:
-            return self.controller_principal, self.tree_principal
-        return None
+        return self.playlist_workflow.active_target()
 
     def _active_library_view_target(self):
         selections = self._selected_filenames_by_controller()
