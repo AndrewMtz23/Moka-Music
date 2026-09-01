@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any, Callable, Optional, Protocol
 
@@ -105,3 +106,92 @@ class CoverWorkflow:
                 self.ui.translate("dialog.error"),
                 self.ui.translate("message.could_not_process_drop", error=exc),
             )
+
+    def apply_cover(
+        self,
+        cover_path: str,
+        targets: Optional[list[CoverTarget]] = None,
+        *,
+        apply_entire_folder: bool = True,
+    ) -> None:
+        if not self.ui.validate_image(cover_path):
+            return
+        resolved_targets = targets if targets is not None else self.targets()
+        if not resolved_targets:
+            self.ui.show_warning(self.ui.translate("dialog.selection"), self.ui.translate("message.no_cover_target"))
+            return
+        backup_targets = self._folder_targets(resolved_targets) if apply_entire_folder else resolved_targets
+        target_count = sum(len(filenames) for _controller, _tree, filenames in backup_targets)
+        self.ui.update_preview_cover(cover_path)
+        if not self.ui.ask_yes_no(
+            self.ui.translate("dialog.confirm"),
+            self.ui.translate(
+                "message.apply_cover_to_count",
+                count=target_count,
+                name=os.path.basename(cover_path),
+            ),
+        ):
+            return
+        if not self.library.create_backups(backup_targets, {"__cover__": os.path.basename(cover_path)}):
+            return
+        self._apply_manual_cover(resolved_targets, cover_path, target_count, apply_entire_folder)
+
+    def _folder_targets(self, targets: list[CoverTarget]) -> list[CoverTarget]:
+        folder_targets: list[CoverTarget] = []
+        seen_controllers: set[int] = set()
+        for controller, tree, _filenames in targets:
+            if id(controller) in seen_controllers:
+                continue
+            seen_controllers.add(id(controller))
+            folder_targets.append((controller, tree, controller.archivos.copy()))
+        return folder_targets
+
+    def _apply_manual_cover(
+        self,
+        targets: list[CoverTarget],
+        cover_path: str,
+        target_count: int,
+        apply_entire_folder: bool,
+    ) -> None:
+        progress = self.ui.begin_progress(
+            title=self.ui.translate("progress.cover_title"),
+            message=self.ui.translate("progress.cover_body"),
+            total=target_count,
+        )
+        preview_controller, preview_filename = self.library.preview_state()
+        try:
+            result = self.cover_controller.apply_manual_cover(
+                targets=targets,
+                cover_path=cover_path,
+                song_info=self.song_info,
+                preview_controller=preview_controller,
+                preview_filename=preview_filename,
+                progress_callback=progress.update,
+                apply_entire_folder=apply_entire_folder,
+            )
+        finally:
+            progress.close()
+        self.library.refresh_changed(targets, result.changed_pairs)
+        self._refresh_preview(result.affected_preview)
+        self._present_result(result.success_count, result.errors, "message.cover_applied")
+
+    def _refresh_preview(self, affected_preview: bool) -> None:
+        controller, filename = self.library.preview_state()
+        if affected_preview and controller is not None and filename:
+            self.library.reload_preview(controller, filename)
+
+    def _present_result(self, success_count: int, errors: list[str], done_key: str) -> None:
+        if success_count:
+            self.library.record_undo("undo.cover")
+            message = self.ui.translate(done_key, count=success_count)
+            if errors:
+                message += self.ui.translate("message.errors_count", count=len(errors))
+                self.ui.show_toast(self.ui.translate("toast.partial"), "warning")
+            else:
+                self.ui.show_toast(self.ui.translate("toast.done"), "success")
+            self.ui.show_info(self.ui.translate("dialog.done"), message)
+            return
+        self.ui.show_error(
+            self.ui.translate("dialog.error"),
+            "\n".join(errors) if errors else self.ui.translate("message.could_not_apply_metadata"),
+        )

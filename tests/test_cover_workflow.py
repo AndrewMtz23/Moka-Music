@@ -135,6 +135,93 @@ class CoverWorkflowTests(unittest.TestCase):
         self.assertEqual(self.errors[0][0], "dialog.error")
         self.assertIn("message.could_not_process_drop", self.errors[0][1])
 
+    def test_apply_cover_stops_for_invalid_image(self):
+        self.image_valid = False
+
+        self.workflow.apply_cover("bad.txt")
+
+        self.cover_controller.apply_manual_cover.assert_not_called()
+        self.assertEqual(self.backups, [])
+
+    def test_apply_cover_warns_when_no_target_exists(self):
+        self.cover_controller.cover_targets.return_value = []
+
+        self.workflow.apply_cover("cover.png")
+
+        self.assertEqual(self.warnings, [("dialog.selection", "message.no_cover_target")])
+
+    def test_apply_cover_declined_confirmation_stops_before_backup(self):
+        self.confirmed = False
+        targets = [(self.controller, self.tree, ["song.mp3"])]
+
+        self.workflow.apply_cover("cover.png", targets=targets)
+
+        self.assertEqual(self.backups, [])
+        self.cover_controller.apply_manual_cover.assert_not_called()
+
+    def test_apply_cover_backup_failure_stops_before_mutation(self):
+        self.library = replace(self.library, create_backups=lambda _groups, _metadata: False)
+        self.workflow = CoverWorkflow(
+            cover_controller=self.cover_controller,
+            drop_controller=self.drop_controller,
+            song_info=self.song_info,
+            ui=self.ui,
+            library=self.library,
+        )
+
+        self.workflow.apply_cover("cover.png", targets=[(self.controller, self.tree, ["song.mp3"])])
+
+        self.cover_controller.apply_manual_cover.assert_not_called()
+
+    def test_apply_cover_selected_only_preserves_targets_and_flag(self):
+        targets = [(self.controller, self.tree, ["song.mp3"])]
+        self.cover_controller.apply_manual_cover.return_value = CoverApplyResult(1, [], False, set())
+
+        self.workflow.apply_cover("cover.png", targets=targets, apply_entire_folder=False)
+
+        self.assertEqual(self.backups[0][0], targets)
+        self.cover_controller.apply_manual_cover.assert_called_once()
+        self.assertFalse(self.cover_controller.apply_manual_cover.call_args.kwargs["apply_entire_folder"])
+
+    def test_manual_cover_success_refreshes_preview_records_undo_and_reports_success(self):
+        targets = [(self.controller, self.tree, ["song.mp3"])]
+        result = CoverApplyResult(2, [], True, {(id(self.controller), id(self.tree))}, "PORTADA.jpg")
+        self.cover_controller.apply_manual_cover.return_value = result
+
+        self.workflow.apply_cover("cover.png", targets=targets)
+
+        self.assertTrue(self.progress.closed)
+        self.assertEqual(self.refreshes, [(targets, result.changed_pairs)])
+        self.assertEqual(self.reloads, [(self.controller, "song.mp3")])
+        self.assertEqual(self.undo, ["undo.cover"])
+        self.assertEqual(self.toasts, [("toast.done", "success")])
+        self.assertEqual(self.infos[0][0], "dialog.done")
+
+    def test_manual_cover_partial_success_reports_warning_and_keeps_undo(self):
+        self.cover_controller.apply_manual_cover.return_value = CoverApplyResult(1, ["bad.mp3"], False, set())
+
+        self.workflow.apply_cover("cover.png", targets=[(self.controller, self.tree, ["song.mp3"])])
+
+        self.assertEqual(self.undo, ["undo.cover"])
+        self.assertEqual(self.toasts, [("toast.partial", "warning")])
+        self.assertIn("message.errors_count", self.infos[0][1])
+
+    def test_manual_cover_total_failure_shows_error_without_undo(self):
+        self.cover_controller.apply_manual_cover.return_value = CoverApplyResult(0, ["failed"], False, set())
+
+        self.workflow.apply_cover("cover.png", targets=[(self.controller, self.tree, ["song.mp3"])])
+
+        self.assertEqual(self.undo, [])
+        self.assertEqual(self.errors, [("dialog.error", "failed")])
+
+    def test_manual_cover_closes_progress_when_controller_raises(self):
+        self.cover_controller.apply_manual_cover.side_effect = RuntimeError("write failed")
+
+        with self.assertRaisesRegex(RuntimeError, "write failed"):
+            self.workflow.apply_cover("cover.png", targets=[(self.controller, self.tree, ["song.mp3"])])
+
+        self.assertTrue(self.progress.closed)
+
 
 if __name__ == "__main__":
     unittest.main()
