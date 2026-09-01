@@ -139,3 +139,142 @@ class PlaylistWorkflow:
         if primary[0].archivos:
             return primary
         return self.library.incoming_target()
+
+    def insert_selected(self) -> None:
+        selections = self.library.selected_targets()
+        if not selections:
+            self.ui.show_warning(
+                self.ui.translate("dialog.selection"),
+                self.ui.translate("message.no_song_selected"),
+            )
+            return
+        if len(selections) > 1:
+            self.ui.show_warning(
+                self.ui.translate("dialog.selection"),
+                self.ui.translate("playlist_insert.one_library"),
+            )
+            return
+
+        controller, tree, filenames = selections[0]
+        if not controller.archivos:
+            self.ui.show_warning(
+                self.ui.translate("dialog.no_files"),
+                self.ui.translate("message.no_loaded_files"),
+            )
+            return
+        if not self.library.can_reorder(controller, tree):
+            self.ui.show_warning(
+                self.ui.translate("dialog.selection"),
+                self.ui.translate("message.reorder_needs_full_view"),
+            )
+            return
+
+        position = self.ui.request_position(
+            title=self.ui.translate("playlist_insert.title"),
+            prompt=self.ui.translate("playlist_insert.prompt", count=len(filenames), total=len(controller.archivos)),
+            total=len(controller.archivos),
+            initial=0,
+            min_position=0,
+            max_position=max(0, len(controller.archivos) - 1),
+            confirm_text=self.ui.translate("playlist_insert.confirm_position"),
+        )
+        if position is None:
+            return
+
+        plan = self.controller.build_insert_plan(
+            controller=controller,
+            tree=tree,
+            filenames=filenames,
+            position=position + 1,
+        )
+        confirmed_plan = self._confirm_plan(plan)
+        if confirmed_plan is not None:
+            self._execute_plan(confirmed_plan, "playlist_insert.done")
+
+    def prepare_active(self) -> None:
+        target = self.active_target()
+        if target is None:
+            self.ui.show_warning(
+                self.ui.translate("dialog.no_files"),
+                self.ui.translate("message.no_loaded_files"),
+            )
+            return
+
+        controller, tree = target
+        if not self.library.can_reorder(controller, tree):
+            self.ui.show_warning(
+                self.ui.translate("dialog.selection"),
+                self.ui.translate("message.reorder_needs_full_view"),
+            )
+            return
+        plan = self.controller.build_plan_from_order(
+            controller=controller,
+            tree=tree,
+            final_order=controller.archivos.copy(),
+        )
+        confirmed_plan = self._confirm_plan(plan)
+        if confirmed_plan is not None:
+            self._execute_plan(confirmed_plan, "playlist_prepare.done")
+
+    def _confirm_plan(self, plan: PlaylistWorkflowPlan) -> PlaylistWorkflowPlan | None:
+        if not plan.items:
+            self.ui.show_info(
+                self.ui.translate("dialog.done"),
+                self.ui.translate("change_preview.no_changes"),
+            )
+            return None
+        return self.ui.request_plan_preview(
+            plan,
+            lambda final_order: self.controller.build_plan_from_order(
+                controller=plan.controller,
+                tree=plan.tree,
+                final_order=final_order,
+            ),
+        )
+
+    def _execute_plan(self, plan: PlaylistWorkflowPlan, done_key: str) -> None:
+        progress = self.ui.begin_progress(
+            title=self.ui.translate("progress.playlist_title"),
+            message=self.ui.translate("progress.playlist_body"),
+            total=len(plan.items) * 2,
+        )
+        preview_controller, preview_filename = self.library.preview_state()
+        try:
+            result = self.controller.execute_plan(
+                plan,
+                song_info=self.song_info,
+                preview_controller=preview_controller,
+                preview_filename=preview_filename,
+                progress_callback=progress.update,
+            )
+        finally:
+            progress.close()
+
+        self.library.set_preview_filename(result.preview_filename)
+        groups = [(plan.controller, plan.tree, plan.final_order)]
+        self.library.refresh_changed(groups, result.changed_pairs)
+        plan.controller.set_sort_mode(SortMode.TRACK_NUMBER)
+        self.library.sync_sort(plan.controller, SortMode.TRACK_NUMBER)
+
+        if preview_controller is plan.controller and result.preview_filename:
+            self.library.select_filename(plan.tree, result.preview_filename)
+            self.library.reload_preview(plan.controller, result.preview_filename)
+
+        if result.success:
+            if result.backup_path:
+                self.library.record_undo_paths("undo.playlist", [result.backup_path])
+            message = self.ui.translate(
+                done_key,
+                tracks=result.track_numbers_updated,
+                renamed=result.renamed,
+            )
+            if result.backup_path:
+                message += f"\n{self.ui.translate('message.backup_created', path=result.backup_path)}"
+            self.ui.show_toast(self.ui.translate("toast.done"), "success")
+            self.ui.show_info(self.ui.translate("dialog.done"), message)
+            return
+
+        self.ui.show_error(
+            self.ui.translate("dialog.error"),
+            "\n".join(result.errors) if result.errors else self.ui.translate("message.could_not_apply_metadata"),
+        )
