@@ -542,9 +542,9 @@ def _setup_playlist_workflow(self) -> None:
     self.playlist_workflow = PlaylistWorkflow(
         controller=self._playlist_workflow_controller(),
         song_info=self.song_info,
-    ui=ui,
-    library=library,
-)
+        ui=ui,
+        library=library,
+    )
 ```
 
 - [ ] **Step 4: Replace orchestration with exact wrappers**

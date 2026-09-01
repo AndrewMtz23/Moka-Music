@@ -84,7 +84,6 @@ Provides only application and library integration:
 - Select and reload the active preview.
 - Create metadata backups for track numbering.
 - Record undo paths.
-- Invalidate cached song information.
 
 `MokaMusicApp` creates one `PlaylistWorkflow` after controllers and UI widgets are available. It supplies the existing `PlaylistWorkflowController`, ports, and song-information service.
 
