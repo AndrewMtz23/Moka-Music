@@ -154,13 +154,42 @@ class AudioToolsWorkflow:
             return
 
         try:
-            self._build_conversion_items(source_groups, sources, options)
+            items = self._build_conversion_items(source_groups, sources, options)
         except Exception as exc:
             self.ui.show_error(
                 self.ui.translate("dialog.error"),
                 self.ui.translate("audio_conversion.failed", error=exc),
             )
             return
+
+        progress = self.ui.begin_progress(
+            title=self.ui.translate("audio_conversion.title"),
+            message=self.ui.translate("audio_conversion.progress"),
+            total=len(items),
+        )
+        try:
+            result = self.operations.convert_files(
+                items,
+                overwrite=bool(options.get("overwrite")),
+                progress_callback=progress.update,
+            )
+        except RuntimeError:
+            self.ui.show_error(
+                self.ui.translate("dialog.error"),
+                self.ui.translate("audio_conversion.ffmpeg_missing"),
+            )
+            return
+        except Exception as exc:
+            self.ui.show_error(
+                self.ui.translate("dialog.error"),
+                self.ui.translate("audio_conversion.failed", error=exc),
+            )
+            return
+        finally:
+            progress.close()
+
+        self._refresh_destination(str(options["destination"]))
+        self._present_result(result)
 
     def _build_conversion_items(
         self,
@@ -188,6 +217,34 @@ class AudioToolsWorkflow:
             str(options["format"]),
             bitrate=options.get("bitrate"),
         )
+
+    def _refresh_destination(self, destination: str) -> None:
+        destination_path = Path(destination).resolve()
+        for controller, tree in self.library.library_targets():
+            if controller.carpeta and Path(controller.carpeta).resolve() == destination_path:
+                controller.refresh_library()
+                self.library.refresh_tree(controller, tree)
+
+    def _present_result(self, result: AudioConversionResult) -> None:
+        if result.errors:
+            self.ui.show_toast(self.ui.translate("toast.partial"), "warning")
+            detail = self.ui.translate(
+                "audio_conversion.done_with_errors",
+                count=result.converted,
+                errors=len(result.errors),
+            )
+            detail += "\n\n" + "\n".join(result.errors[:5])
+            if len(result.errors) > 5:
+                detail += self.ui.translate(
+                    "message.more_errors",
+                    count=len(result.errors) - 5,
+                )
+            self.ui.show_warning(self.ui.translate("audio_conversion.title"), detail)
+            return
+
+        message = self.ui.translate("audio_conversion.done", count=result.converted)
+        self.ui.show_toast(message, "success")
+        self.ui.show_info(self.ui.translate("dialog.done"), message)
 
     def _require_targets(self) -> list[AudioTarget]:
         groups = self.targets()

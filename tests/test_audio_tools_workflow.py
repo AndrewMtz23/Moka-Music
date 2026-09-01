@@ -278,3 +278,105 @@ def test_conversion_item_build_error_is_presented_and_stops() -> None:
         "audio_conversion.failed:{'error': ValueError('bad format')}",
     )
     assert not any(event[0] == "begin_progress" for event in harness.events)
+
+
+def test_conversion_executes_with_progress_refreshes_matching_library_and_reports_success(
+    tmp_path: Path,
+) -> None:
+    harness = Harness()
+    destination = tmp_path / "out"
+    selected_controller = controller(str(tmp_path / "source"), ["song.wav"])
+    refresh_calls: list[str] = []
+    matching = SimpleNamespace(
+        carpeta=str(destination),
+        archivos=[],
+        refresh_library=lambda: refresh_calls.append("controller"),
+    )
+    other = controller(str(tmp_path / "other"), [])
+    item = AudioConversionItem(tmp_path / "source" / "song.wav", destination / "song.mp3", "320k")
+    harness.selections = [(selected_controller, "source-tree", ["song.wav"])]
+    harness.options = {
+        "destination": str(destination),
+        "format": ".mp3",
+        "bitrate": "320k",
+        "overwrite": True,
+        "preserve_structure": False,
+    }
+    harness.conversion_items = [item]
+    harness.conversion_result = AudioConversionResult(1, [], [item])
+    harness.library_pairs = [(matching, "matching-tree"), (other, "other-tree")]
+
+    harness.workflow.convert_selected()
+
+    assert (
+        "begin_progress",
+        {
+            "title": "audio_conversion.title",
+            "message": "audio_conversion.progress",
+            "total": 1,
+        },
+    ) in harness.events
+    conversion = next(event for event in harness.events if event[0] == "convert")
+    assert conversion[1] == ([item],)
+    assert conversion[2] == {"overwrite": True, "progress_callback": harness.progress.update}
+    assert harness.progress.closed
+    assert refresh_calls == ["controller"]
+    assert ("refresh_tree", matching, "matching-tree") in harness.events
+    assert ("refresh_tree", other, "other-tree") not in harness.events
+    assert harness.events[-2:] == [
+        ("toast", "audio_conversion.done:{'count': 1}", "success"),
+        ("info", "dialog.done", "audio_conversion.done:{'count': 1}"),
+    ]
+
+
+def test_missing_ffmpeg_closes_progress_and_shows_specific_error(tmp_path: Path) -> None:
+    harness = Harness()
+    harness.selections = [(controller("music", ["song.wav"]), "tree", ["song.wav"])]
+    harness.options = {"destination": str(tmp_path), "format": ".mp3"}
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("ffmpeg is not available")
+
+    object.__setattr__(harness.workflow.operations, "convert_files", fail)
+
+    harness.workflow.convert_selected()
+
+    assert harness.progress.closed
+    assert harness.events[-1] == ("error", "dialog.error", "audio_conversion.ffmpeg_missing")
+
+
+def test_unexpected_conversion_error_closes_progress_and_includes_detail(tmp_path: Path) -> None:
+    harness = Harness()
+    harness.selections = [(controller("music", ["song.wav"]), "tree", ["song.wav"])]
+    harness.options = {"destination": str(tmp_path), "format": ".mp3"}
+
+    def fail(*args, **kwargs):
+        raise OSError("disk unavailable")
+
+    object.__setattr__(harness.workflow.operations, "convert_files", fail)
+
+    harness.workflow.convert_selected()
+
+    assert harness.progress.closed
+    assert harness.events[-1] == (
+        "error",
+        "dialog.error",
+        "audio_conversion.failed:{'error': OSError('disk unavailable')}",
+    )
+
+
+def test_partial_conversion_limits_visible_errors_to_five(tmp_path: Path) -> None:
+    harness = Harness()
+    harness.selections = [(controller("music", ["song.wav"]), "tree", ["song.wav"])]
+    harness.options = {"destination": str(tmp_path / "out"), "format": ".mp3"}
+    harness.conversion_result = AudioConversionResult(2, [f"error-{index}" for index in range(7)], [])
+
+    harness.workflow.convert_selected()
+
+    assert harness.events[-2][0:2] == ("toast", "toast.partial")
+    warning = harness.events[-1]
+    assert warning[0:2] == ("warning", "audio_conversion.title")
+    assert "audio_conversion.done_with_errors:{'count': 2, 'errors': 7}" in warning[2]
+    assert all(f"error-{index}" in warning[2] for index in range(5))
+    assert "error-5" not in warning[2]
+    assert "message.more_errors:{'count': 2}" in warning[2]
