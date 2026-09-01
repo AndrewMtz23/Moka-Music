@@ -1,7 +1,7 @@
 import logging
 import queue
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from typing import Optional
 
 from tkinterdnd2 import DND_FILES, TkinterDnD
@@ -36,6 +36,7 @@ from .interaction_workflow import InteractionWorkflowMixin
 from .library_workflow import LibraryWorkflowMixin
 from .metadata_workflow import MetadataWorkflowMixin
 from .theme import StyleManager
+from .workflows import CoverLibraryPort, CoverUiPort, CoverWorkflow
 
 
 class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixin, InteractionWorkflowMixin):
@@ -100,9 +101,43 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
 
         self._setup_main_menu()
         self._setup_ui()
+        self._setup_cover_workflow()
         self._bind_events()
         self._load_config()
         self.root.after(200, self._show_first_run_welcome)
+
+    def _setup_cover_workflow(self) -> None:
+        ui = CoverUiPort(
+            translate=self.t,
+            current_song=self.preview.get_current_song,
+            select_image=self.file_handler.seleccionar_imagen,
+            validate_image=self.file_handler.validar_imagen,
+            update_preview_cover=self.preview.update_cover_from_file,
+            split_drop_data=self.root.tk.splitlist,
+            show_warning=messagebox.showwarning,
+            ask_yes_no=messagebox.askyesno,
+            show_info=messagebox.showinfo,
+            show_error=messagebox.showerror,
+            begin_progress=self._begin_progress,
+            show_toast=lambda message, kind: self._show_toast(message, kind=kind),
+            log_drop_error=lambda exc: self.logger.error("Error handling cover drop: %s", exc),
+        )
+        library = CoverLibraryPort(
+            selected_targets=self._selected_filenames_by_controller,
+            preview_state=lambda: (self._preview_controller, self._preview_filename),
+            tree_for_controller=self._tree_for_controller,
+            create_backups=lambda groups, metadata: bool(self._create_metadata_backup_for_groups(groups, metadata)),
+            refresh_changed=self._refresh_changed_library_pairs,
+            reload_preview=self._load_song_preview,
+            record_undo=self._record_undo_action,
+        )
+        self.cover_workflow = CoverWorkflow(
+            cover_controller=self._cover_controller(),
+            drop_controller=self._drop_controller(),
+            song_info=self.song_info,
+            ui=ui,
+            library=library,
+        )
 
     def _setup_ui(self) -> None:
         main_panel = ttk.Frame(self.root)

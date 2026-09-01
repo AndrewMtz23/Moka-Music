@@ -121,6 +121,26 @@ class FakeProgress:
         self.closed = True
 
 
+class FakeCoverWorkflow:
+    def __init__(self):
+        self.calls = []
+
+    def select_preview_cover(self):
+        self.calls.append(("select",))
+
+    def handle_cover_drop(self, raw_data):
+        self.calls.append(("drop", raw_data))
+
+    def apply_cover(self, cover_path, targets=None, *, apply_entire_folder=True):
+        self.calls.append(("apply", cover_path, targets, apply_entire_folder))
+
+    def apply_auto_cover(self):
+        self.calls.append(("auto",))
+
+    def apply_auto_cover_targets(self, targets):
+        self.calls.append(("auto_targets", targets))
+
+
 class UiLibraryRefreshTests(unittest.TestCase):
     def make_app(self, main_controller=None, incoming_controller=None, main_tree=None, incoming_tree=None):
         app = MokaMusicApp.__new__(MokaMusicApp)
@@ -250,6 +270,38 @@ class UiLibraryRefreshTests(unittest.TestCase):
                 app._empty_library_message(filtered, panel),
                 "No hay canciones que coincidan con la busqueda o filtro actual.",
             )
+
+    def test_cover_compatibility_wrappers_delegate_exact_arguments(self):
+        app = self.make_app()
+        app.cover_workflow = FakeCoverWorkflow()
+        event = type("Event", (), {"data": "cover.png"})()
+        targets = [(app.controller_principal, app.tree_principal, ["song.mp3"])]
+
+        app._select_preview_cover()
+        app._handle_cover_drop(event)
+        app._apply_cover_to_targets("cover.png", targets=targets, apply_entire_folder=False)
+        app._apply_auto_cover_from_folder()
+        app._apply_auto_cover_targets(targets)
+
+        self.assertEqual(
+            app.cover_workflow.calls,
+            [
+                ("select",),
+                ("drop", "cover.png"),
+                ("apply", "cover.png", targets, False),
+                ("auto",),
+                ("auto_targets", targets),
+            ],
+        )
+
+    def test_apply_cover_compatibility_wrapper_delegates_selected_only_scope(self):
+        app = self.make_app()
+        app.cover_workflow = FakeCoverWorkflow()
+        targets = [(app.controller_principal, app.tree_principal, ["song.mp3"])]
+
+        app._apply_cover_to_targets("cover.png", targets=targets, apply_entire_folder=False)
+
+        self.assertEqual(app.cover_workflow.calls, [("apply", "cover.png", targets, False)])
 
     def test_cleanup_presets_are_normalized_to_known_actions(self):
         app = self.make_app()

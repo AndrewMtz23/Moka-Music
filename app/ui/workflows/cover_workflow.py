@@ -218,8 +218,7 @@ class CoverWorkflow:
         if not self.ui.ask_yes_no(self.ui.translate("dialog.confirm"), message):
             return
         backup_groups = [
-            (controller, tree, filenames)
-            for controller, tree, filenames, _cover_path in cover_plan.groups
+            (controller, tree, filenames) for controller, tree, filenames, _cover_path in cover_plan.groups
         ]
         if not self.library.create_backups(backup_groups, {"__cover__": "auto"}):
             return

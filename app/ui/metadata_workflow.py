@@ -79,171 +79,23 @@ class MetadataWorkflowMixin:
         self._handle_action_result(apply_result.result)
 
     def _select_preview_cover(self) -> None:
-        if not self.preview.get_current_song():
-            messagebox.showwarning(self.t("dialog.selection"), self.t("preview.no_active_song"))
-            return
-        cover_path = self.file_handler.seleccionar_imagen()
-        if cover_path:
-            self._apply_cover_to_targets(cover_path, targets=self._preview_cover_targets())
+        self.cover_workflow.select_preview_cover()
 
     def _handle_cover_drop(self, event) -> None:
-        try:
-            payload = self._drop_controller().payload_from_raw(event.data, splitlist=self.root.tk.splitlist)
-            if not payload.image_files:
-                messagebox.showwarning(self.t("dialog.cover_selected"), self.t("message.no_image_dropped"))
-                return
-            self._apply_cover_to_targets(payload.image_files[0], targets=self._preview_cover_targets())
-        except Exception as exc:
-            self.logger.error("Error handling cover drop: %s", exc)
-            messagebox.showerror(self.t("dialog.error"), self.t("message.could_not_process_drop", error=exc))
-
-    def _cover_targets(self) -> list[tuple[MetadataController, object, list[str]]]:
-        return self._cover_controller().cover_targets(
-            selections=self._selected_filenames_by_controller(),
-            preview_controller=self._preview_controller,
-            preview_filename=self._preview_filename,
-            tree_for_controller=self._tree_for_controller,
-        )
-
-    def _preview_cover_targets(self) -> list[tuple[MetadataController, object, list[str]]]:
-        controller = self._preview_controller
-        filename = self._preview_filename
-        if controller is None or not filename:
-            return []
-        tree = self._tree_for_controller(controller)
-        if tree is None:
-            return []
-        return [(controller, tree, [filename])]
+        self.cover_workflow.handle_cover_drop(event.data)
 
     def _apply_cover_to_targets(self, cover_path: str, targets=None, *, apply_entire_folder: bool = True) -> None:
-        if not self.file_handler.validar_imagen(cover_path):
-            return
-        targets = targets if targets is not None else self._cover_targets()
-        if not targets:
-            messagebox.showwarning(self.t("dialog.selection"), self.t("message.no_cover_target"))
-            return
-        backup_targets = self._folder_cover_targets(targets) if apply_entire_folder else targets
-        target_count = sum(len(filenames) for _controller, _tree, filenames in backup_targets)
-        self.preview.update_cover_from_file(cover_path)
-        backup_metadata = {"__cover__": os.path.basename(cover_path)}
-        if not messagebox.askyesno(
-            self.t("dialog.confirm"),
-            self.t("message.apply_cover_to_count", count=target_count, name=os.path.basename(cover_path)),
-        ):
-            return
-        if not self._create_metadata_backup_for_groups(backup_targets, backup_metadata):
-            return
-
-        progress = self._begin_progress(
-            title=self.t("progress.cover_title"),
-            message=self.t("progress.cover_body"),
-            total=target_count,
+        self.cover_workflow.apply_cover(
+            cover_path,
+            targets=targets,
+            apply_entire_folder=apply_entire_folder,
         )
-        try:
-            result = self._cover_controller().apply_manual_cover(
-                targets=targets,
-                cover_path=cover_path,
-                song_info=self.song_info,
-                preview_controller=self._preview_controller,
-                preview_filename=self._preview_filename,
-                progress_callback=progress.update,
-                apply_entire_folder=apply_entire_folder,
-            )
-        finally:
-            progress.close()
-        self._refresh_changed_library_pairs(targets, result.changed_pairs)
-
-        if result.affected_preview and self._preview_controller and self._preview_filename:
-            self._load_song_preview(self._preview_controller, self._preview_filename)
-
-        if result.success_count:
-            self._record_undo_action("undo.cover")
-            message = self.t("message.cover_applied", count=result.success_count)
-            if result.errors:
-                message += self.t("message.errors_count", count=len(result.errors))
-                self._show_toast(self.t("toast.partial"), kind="warning")
-            else:
-                self._show_toast(self.t("toast.done"), kind="success")
-            messagebox.showinfo(self.t("dialog.done"), message)
-            return
-
-        messagebox.showerror(
-            self.t("dialog.error"),
-            "\n".join(result.errors) if result.errors else self.t("message.could_not_apply_metadata"),
-        )
-
-    def _folder_cover_targets(self, targets):
-        folder_targets = []
-        seen_controllers: set[int] = set()
-        for controller, tree, _filenames in targets:
-            if id(controller) in seen_controllers:
-                continue
-            seen_controllers.add(id(controller))
-            folder_targets.append((controller, tree, controller.archivos.copy()))
-        return folder_targets
 
     def _apply_auto_cover_from_folder(self) -> None:
-        targets = self._cover_targets()
-        if not targets:
-            messagebox.showwarning(self.t("dialog.selection"), self.t("message.no_cover_target"))
-            return
-        self._apply_auto_cover_targets(targets)
+        self.cover_workflow.apply_auto_cover()
 
     def _apply_auto_cover_targets(self, targets) -> None:
-        cover_plan = self._cover_controller().build_auto_cover_plan(targets)
-        if not cover_plan.groups:
-            messagebox.showwarning(self.t("dialog.cover_selected"), self.t("auto_cover.not_found"))
-            return
-
-        message = self.t("auto_cover.confirm", count=cover_plan.planned_count, covers=len(cover_plan.groups))
-        if cover_plan.missing:
-            message += self.t("auto_cover.missing_count", count=len(cover_plan.missing))
-        if not messagebox.askyesno(self.t("dialog.confirm"), message):
-            return
-
-        backup_groups = [
-            (controller, tree, filenames) for controller, tree, filenames, _cover_path in cover_plan.groups
-        ]
-        if not self._create_metadata_backup_for_groups(backup_groups, {"__cover__": "auto"}):
-            return
-
-        progress = self._begin_progress(
-            title=self.t("progress.cover_title"),
-            message=self.t("progress.cover_body"),
-            total=cover_plan.planned_count,
-        )
-        try:
-            result = self._cover_controller().apply_cover_plan(
-                cover_plan.groups,
-                song_info=self.song_info,
-                preview_controller=self._preview_controller,
-                preview_filename=self._preview_filename,
-                progress_callback=progress.update,
-            )
-        finally:
-            progress.close()
-        if result.preview_cover_path:
-            self.preview.update_cover_from_file(result.preview_cover_path)
-        self._refresh_changed_library_pairs(backup_groups, result.changed_pairs)
-
-        if result.affected_preview and self._preview_controller and self._preview_filename:
-            self._load_song_preview(self._preview_controller, self._preview_filename)
-
-        if result.success_count:
-            self._record_undo_action("undo.cover")
-            done = self.t("auto_cover.done", count=result.success_count)
-            if result.errors:
-                done += self.t("message.errors_count", count=len(result.errors))
-                self._show_toast(self.t("toast.partial"), kind="warning")
-            else:
-                self._show_toast(self.t("toast.done"), kind="success")
-            messagebox.showinfo(self.t("dialog.done"), done)
-            return
-
-        messagebox.showerror(
-            self.t("dialog.error"),
-            "\n".join(result.errors) if result.errors else self.t("message.could_not_apply_metadata"),
-        )
+        self.cover_workflow.apply_auto_cover_targets(targets)
 
     def _refresh_changed_library_pairs(
         self,
