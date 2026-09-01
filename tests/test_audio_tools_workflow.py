@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 from app.services.audio_conversion_service import AudioConversionItem, AudioConversionResult
@@ -188,3 +189,92 @@ def test_validation_opens_modal_with_existing_schema() -> None:
         ("format", "audio_tools.format", 100),
         ("issues", "audio_tools.issues", 220),
     ]
+
+
+def test_conversion_requires_explicit_selection() -> None:
+    harness = Harness()
+    harness.active = (controller("music", ["fallback.mp3"]), "tree")
+
+    harness.workflow.convert_selected()
+
+    assert harness.events == [("warning", "dialog.selection", "audio_conversion.no_selection")]
+
+
+def test_conversion_cancellation_stops_before_item_planning() -> None:
+    harness = Harness()
+    harness.selections = [(controller("music", ["song.mp3"]), "tree", ["song.mp3"])]
+
+    harness.workflow.convert_selected()
+
+    assert harness.events == [("request_options", 1)]
+
+
+def test_conversion_builds_flat_items_from_all_selected_libraries(tmp_path: Path) -> None:
+    harness = Harness()
+    first = controller(str(tmp_path / "one"), ["a.mp3"])
+    second = controller(str(tmp_path / "two"), ["b.flac"])
+    harness.selections = [
+        (first, "tree-one", ["a.mp3"]),
+        (second, "tree-two", ["b.flac"]),
+    ]
+    harness.options = {
+        "destination": str(tmp_path / "out"),
+        "format": ".mp3",
+        "bitrate": "320k",
+        "overwrite": False,
+        "preserve_structure": False,
+    }
+
+    harness.workflow.convert_selected()
+
+    build = next(event for event in harness.events if event[0] == "build_items")
+    assert build[1] == (
+        [str(tmp_path / "one" / "a.mp3"), str(tmp_path / "two" / "b.flac")],
+        str(tmp_path / "out"),
+        ".mp3",
+    )
+    assert build[2] == {"bitrate": "320k"}
+
+
+def test_conversion_preserves_each_library_root(tmp_path: Path) -> None:
+    harness = Harness()
+    first = controller(str(tmp_path / "one"), ["a.mp3"])
+    second = controller(str(tmp_path / "two"), ["b.mp3"])
+    harness.selections = [(first, "one", ["a.mp3"]), (second, "two", ["b.mp3"])]
+    harness.options = {
+        "destination": str(tmp_path / "out"),
+        "format": ".flac",
+        "bitrate": None,
+        "preserve_structure": True,
+    }
+
+    harness.workflow.convert_selected()
+
+    builds = [event for event in harness.events if event[0] == "build_items"]
+    assert len(builds) == 2
+    assert builds[0][2] == {
+        "bitrate": None,
+        "preserve_structure": True,
+        "source_root": str(tmp_path / "one"),
+    }
+    assert builds[1][2]["source_root"] == str(tmp_path / "two")
+
+
+def test_conversion_item_build_error_is_presented_and_stops() -> None:
+    harness = Harness()
+    harness.selections = [(controller("music", ["song.mp3"]), "tree", ["song.mp3"])]
+    harness.options = {"destination": "out", "format": ".invalid"}
+
+    def fail(*args, **kwargs):
+        raise ValueError("bad format")
+
+    object.__setattr__(harness.workflow.operations, "build_conversion_items", fail)
+
+    harness.workflow.convert_selected()
+
+    assert harness.events[-1] == (
+        "error",
+        "dialog.error",
+        "audio_conversion.failed:{'error': ValueError('bad format')}",
+    )
+    assert not any(event[0] == "begin_progress" for event in harness.events)

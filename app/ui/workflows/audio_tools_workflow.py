@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Protocol
 
 from ...services.audio_conversion_service import AudioConversionItem, AudioConversionResult
@@ -132,6 +133,60 @@ class AudioToolsWorkflow:
                 ("format", self.ui.translate("audio_tools.format"), 100),
                 ("issues", self.ui.translate("audio_tools.issues"), 220),
             ],
+        )
+
+    def convert_selected(self) -> None:
+        selections = self.library.selected_targets()
+        if not selections:
+            self.ui.show_warning(
+                self.ui.translate("dialog.selection"),
+                self.ui.translate("audio_conversion.no_selection"),
+            )
+            return
+
+        source_groups = [
+            (controller, [str(Path(controller.carpeta) / filename) for filename in filenames])
+            for controller, _tree, filenames in selections
+        ]
+        sources = [source for _controller, group in source_groups for source in group]
+        options = self.ui.request_conversion_options(len(sources))
+        if not options:
+            return
+
+        try:
+            self._build_conversion_items(source_groups, sources, options)
+        except Exception as exc:
+            self.ui.show_error(
+                self.ui.translate("dialog.error"),
+                self.ui.translate("audio_conversion.failed", error=exc),
+            )
+            return
+
+    def _build_conversion_items(
+        self,
+        source_groups: list[tuple[object, list[str]]],
+        sources: list[str],
+        options: dict[str, object],
+    ) -> list[AudioConversionItem]:
+        if bool(options.get("preserve_structure")):
+            items: list[AudioConversionItem] = []
+            for controller, group_sources in source_groups:
+                items.extend(
+                    self.operations.build_conversion_items(
+                        group_sources,
+                        str(options["destination"]),
+                        str(options["format"]),
+                        bitrate=options.get("bitrate"),
+                        preserve_structure=True,
+                        source_root=controller.carpeta,
+                    )
+                )
+            return items
+        return self.operations.build_conversion_items(
+            sources,
+            str(options["destination"]),
+            str(options["format"]),
+            bitrate=options.get("bitrate"),
         )
 
     def _require_targets(self) -> list[AudioTarget]:
