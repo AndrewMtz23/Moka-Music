@@ -212,7 +212,7 @@ Existing `tests/test_playlist_workflow_controller.py` remains the domain-level s
 - `PlaylistWorkflow` depends only on its declared ports, `PlaylistWorkflowController`, and the song-information service.
 - Insert and prepare share a single execution path.
 - Existing callbacks and export target resolution remain compatible.
-- `metadata_workflow.py` loses approximately 220–250 lines and retains only playlist delegation wrappers.
+- `metadata_workflow.py` loses approximately 200–220 lines and retains only playlist delegation wrappers.
 - No playlist behavior, user-facing text, or visual style changes.
 - No new external dependency.
 - Focused and full automated verification passes.
