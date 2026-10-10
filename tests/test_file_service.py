@@ -84,6 +84,41 @@ class FileServiceTests(unittest.TestCase):
             self.assertIn("source.mp3", controller.archivos)
             self.assertEqual(result.data["metadata"], {"title": "source"})
 
+    def test_add_song_to_library_preserves_existing_unregistered_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "track.mp3"
+            source.write_bytes(b"incoming audio")
+            destination = root / "library"
+            destination.mkdir()
+            existing = destination / source.name
+            existing.write_bytes(b"original audio")
+
+            controller = MetadataController()
+            controller.carpeta = str(destination)
+
+            result = add_song_to_library(str(source), controller, song_info=FakeSongInfo(), translator=fake_t)
+
+            self.assertFalse(result.success)
+            self.assertEqual(result.message, fake_t("add.song_exists", name="track.mp3"))
+            self.assertEqual(existing.read_bytes(), b"original audio")
+            self.assertEqual(source.read_bytes(), b"incoming audio")
+            self.assertEqual(controller.archivos, [])
+
+    def test_add_song_to_library_registers_file_already_in_destination(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            folder = Path(temp_dir)
+            source = folder / "track.mp3"
+            source.write_bytes(b"original audio")
+            controller = MetadataController()
+            controller.carpeta = str(folder)
+
+            result = add_song_to_library(str(source), controller, song_info=FakeSongInfo(), translator=fake_t)
+
+            self.assertTrue(result.success)
+            self.assertEqual(source.read_bytes(), b"original audio")
+            self.assertIn("track.mp3", controller.archivos)
+
     def test_move_song_between_libraries_updates_both_controllers(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
