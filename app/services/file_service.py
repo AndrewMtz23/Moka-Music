@@ -87,6 +87,8 @@ def add_song_to_library(
     try:
         destination_dir.mkdir(parents=True, exist_ok=True)
         if source_path.resolve() != destination_path.resolve():
+            if destination_path.exists():
+                return ActionResult.fail(t("add.song_exists", name=destination_path.name))
             shutil.copy2(source_path, destination_path)
         destination_controller.register_file(destination_path.name)
         metadata = inspector.get_metadata(str(destination_path)) or {}
