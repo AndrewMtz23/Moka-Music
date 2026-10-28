@@ -217,10 +217,16 @@ def fuzzy_duplicate_filenames(files: list[str], metadata_cache: MetadataCache, t
         if not key:
             continue
         for other in files[index + 1 :]:
+            if filename in duplicates and other in duplicates:
+                continue
             other_key = keys.get(other, "")
             if not other_key:
                 continue
-            if SequenceMatcher(None, key, other_key).ratio() >= threshold:
+            matcher = SequenceMatcher(None, key, other_key)
+            # Both quick ratios are upper bounds: rejected pairs cannot match.
+            if matcher.real_quick_ratio() < threshold or matcher.quick_ratio() < threshold:
+                continue
+            if matcher.ratio() >= threshold:
                 duplicates.update({filename, other})
     return duplicates
 

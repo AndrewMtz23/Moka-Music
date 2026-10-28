@@ -17,6 +17,7 @@ TEXT_WIDGET_KEYS: dict[str, tuple[str, str]] = {
     "incoming_filter_label": ("text", "filter.label"),
     "add_song_button": ("text", "button.add_song"),
     "move_to_main_button": ("text", "button.move_to_main"),
+    "move_to_incoming_button": ("text", "button.move_to_incoming"),
     "metadata_frame": ("text", "metadata.global"),
     "artist_label": ("text", "metadata.artist"),
     "album_artist_label": ("text", "metadata.album_artist"),

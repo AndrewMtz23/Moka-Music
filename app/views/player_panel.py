@@ -22,6 +22,7 @@ from ..i18n import I18n
 from ..services.song_info_service import SongInfo
 from ..ui_helpers.widgets import ToolTip
 from ..utils.audio_utils import AudioUtils
+from .player_details import PlayerDetails
 
 
 class PlayerControls(ttk.Frame):
@@ -49,6 +50,7 @@ class PlayerControls(ttk.Frame):
         self.style = ttk.Style()
         self.playback = PlaybackController()
         self.song_info = SongInfo()
+        self.on_context_changed: Optional[Callable[[], None]] = None
         self.on_track_end: Optional[Callable[[], None]] = None
         self.on_next_requested: Optional[Callable[[], None]] = None
         self.on_prev_requested: Optional[Callable[[], None]] = None
@@ -68,6 +70,8 @@ class PlayerControls(ttk.Frame):
 
         self._setup_styles()
         self._setup_ui()
+        self.shuffle_var.trace_add("write", self._notify_context_changed)
+        self.repeat_var.trace_add("write", self._notify_context_changed)
         self._start_progress_loop()
 
     def _play_pause_icon(self) -> str:
@@ -77,6 +81,12 @@ class PlayerControls(ttk.Frame):
         self._sync_theme_colors()
         self.style.configure("Player.TFrame", background=self._player_bg)
         self.style.configure("PlayerCard.TFrame", background=self._player_card)
+        for name, foreground, font in (
+            ("PlayerDetailsHeading.TLabel", self._player_text, ("Segoe UI Semibold", 10)),
+            ("PlayerDetails.TLabel", self._player_text, ("Segoe UI", 9)),
+            ("PlayerDetailsMuted.TLabel", self._player_muted, ("Segoe UI", 8)),
+        ):
+            self.style.configure(name, background=self._player_bg, foreground=foreground, font=font)
         self.style.configure(
             "PlayerTitle.TLabel",
             background=self._player_card,
@@ -171,6 +181,7 @@ class PlayerControls(ttk.Frame):
         self._player_secondary = palette.get("surface_alt", "#f8fafc")
         self._player_text = palette.get("text", "#111827")
         self._player_muted = palette.get("text_secondary", "#7c8492")
+        self._player_disabled = palette.get("disabled", self._player_muted)
         self._player_primary = palette.get("highlight", palette.get("primary", "#2563eb"))
         self._player_primary_hover = palette.get("primary_hover", self._player_primary)
         self._player_primary_text = palette.get("highlight_text", palette.get("button_text", "#ffffff"))
@@ -181,9 +192,9 @@ class PlayerControls(ttk.Frame):
             self._player_shadow_soft = self._blend(self._player_card, "#ffffff", 0.08)
             self._player_vinyl_shadow = self._blend(self._player_bg, "#000000", 0.42)
         else:
-            self._player_shadow_deep = "#d6dbe7"
-            self._player_shadow_soft = "#edf0f6"
-            self._player_vinyl_shadow = "#c8cfdd"
+            self._player_shadow_deep = self._blend(self._player_bg, "#000000", 0.14)
+            self._player_shadow_soft = self._blend(self._player_card, self._player_bg, 0.5)
+            self._player_vinyl_shadow = self._blend(self._player_bg, "#000000", 0.2)
 
     def _is_dark(self, color: str) -> bool:
         red, green, blue = self._hex_to_rgb(color, fallback=(244, 246, 251))
@@ -212,7 +223,7 @@ class PlayerControls(ttk.Frame):
     def _setup_ui(self) -> None:
         self.configure(style="Player.TFrame")
         self.main_frame = ttk.Frame(self, style="Player.TFrame")
-        self.main_frame.pack(fill="both", expand=True, padx=(64, 14), pady=10)
+        self.main_frame.pack(fill="both", expand=True, padx=12, pady=10)
 
         self.shadow_canvas = tk.Canvas(
             self.main_frame, height=230, borderwidth=0, highlightthickness=0, background=self._player_bg
@@ -232,7 +243,7 @@ class PlayerControls(ttk.Frame):
 
         self.card_frame.columnconfigure(0, weight=1)
 
-        top_row = ttk.Frame(self.card_frame, style="PlayerCard.TFrame")
+        self.top_row = top_row = ttk.Frame(self.card_frame, style="PlayerCard.TFrame")
         top_row.grid(row=0, column=0, sticky="ew", padx=(82, 22), pady=(18, 0))
         top_row.columnconfigure(0, weight=1)
         top_row.columnconfigure(1, weight=0)
@@ -245,6 +256,7 @@ class PlayerControls(ttk.Frame):
             text_frame,
             text=self.t("player.no_track"),
             anchor="w",
+            width=1,
             style="PlayerTitle.TLabel",
         )
         self.track_info_label.pack(fill="x")
@@ -252,6 +264,7 @@ class PlayerControls(ttk.Frame):
         self.artist_label = ttk.Label(
             text_frame,
             text="",
+            width=1,
             anchor="w",
             style="PlayerMuted.TLabel",
         )
@@ -309,7 +322,7 @@ class PlayerControls(ttk.Frame):
         self.more_menu.add_command(label=self.t("player.stop"), command=self.stop)
         self.more_button.configure(menu=self.more_menu)
 
-        progress_frame = ttk.Frame(self.card_frame, style="PlayerCard.TFrame")
+        self.progress_frame = progress_frame = ttk.Frame(self.card_frame, style="PlayerCard.TFrame")
         progress_frame.grid(row=1, column=0, sticky="ew", padx=(82, 28), pady=(14, 0))
         progress_frame.columnconfigure(1, weight=1)
 
@@ -318,6 +331,7 @@ class PlayerControls(ttk.Frame):
 
         self.progress_bar = tk.Canvas(
             progress_frame,
+            width=1,
             height=14,
             borderwidth=0,
             highlightthickness=0,
@@ -331,12 +345,11 @@ class PlayerControls(ttk.Frame):
         self.time_label_end = ttk.Label(progress_frame, text="00:00", width=6, anchor="e", style="PlayerTiny.TLabel")
         self.time_label_end.grid(row=0, column=2, sticky="e")
 
-        transport_frame = ttk.Frame(self.card_frame, style="PlayerCard.TFrame")
+        self.transport_frame = transport_frame = ttk.Frame(self.card_frame, style="PlayerCard.TFrame")
         transport_frame.grid(row=2, column=0, sticky="ew", padx=(82, 28), pady=(12, 20))
-        transport_frame.configure(height=86)
-        transport_frame.grid_propagate(False)
+        transport_frame.bind("<Configure>", lambda _event: self._draw_player_shell())
         transport_inner = ttk.Frame(transport_frame, style="PlayerCard.TFrame")
-        transport_inner.place(relx=0.5, y=22, anchor="center")
+        transport_inner.pack()
 
         self.btn_prev = ttk.Button(
             transport_inner,
@@ -365,8 +378,8 @@ class PlayerControls(ttk.Frame):
         )
         self.btn_next.pack(side="left")
 
-        secondary_frame = ttk.Frame(transport_frame, style="PlayerCard.TFrame")
-        secondary_frame.place(relx=0.5, y=64, anchor="center")
+        self.secondary_frame = secondary_frame = ttk.Frame(transport_frame, style="PlayerCard.TFrame")
+        secondary_frame.pack(pady=(6, 0))
         secondary_frame.columnconfigure(0, weight=0)
 
         self.volume_label = ttk.Label(self.card_frame, text=self.t("player.volume"), style="PlayerMuted.TLabel")
@@ -423,6 +436,8 @@ class PlayerControls(ttk.Frame):
             highlightthickness=0,
             background=self._player_card,
         )
+        self.details = PlayerDetails(self.main_frame, self.t)
+        self.details_window = self.shadow_canvas.create_window(0, 0, anchor="nw", window=self.details, state="hidden")
         self._draw_vinyl()
         self._draw_visualizer()
         self._register_tooltips()
@@ -440,14 +455,27 @@ class PlayerControls(ttk.Frame):
         canvas = self.shadow_canvas
         canvas.delete("shell")
         width = max(1, canvas.winfo_width())
-        height = max(212, canvas.winfo_height())
-        card_x = 112
-        card_y = 22
-        card_w = max(260, width - card_x - 8)
-        card_h = min(186, height - 34)
+        height = max(1, canvas.winfo_height())
+        compact = width < 620 or height < 400
+        self._configure_layout(compact)
+        card_x = 0 if compact else 112
+        card_y = 8
+        card_w = max(1, width - card_x - 8)
+        card_h = min(self.card_frame.winfo_reqheight(), max(1, height - card_y - 12))
+        details_y = card_y + card_h + 20
+        details_height = max(1, height - details_y - 4)
+        show_details = details_height >= 100
+        if hasattr(self, "details_window"):
+            canvas.itemconfigure(
+                self.details_window,
+                state="normal" if show_details else "hidden",
+                width=max(1, width - 16),
+                height=details_height,
+            )
+            canvas.coords(self.details_window, 8, details_y)
         canvas.coords(self.card_window, card_x, card_y)
         canvas.itemconfigure(self.card_window, width=card_w, height=card_h)
-        canvas.coords(self.vinyl_window, 0, card_y - 5)
+        canvas.coords(self.vinyl_window, 8 if compact else 0, card_y if compact else card_y - 5)
         self._rounded_rect(
             canvas,
             card_x + 7,
@@ -483,6 +511,37 @@ class PlayerControls(ttk.Frame):
         )
         canvas.tag_lower("shell")
 
+    def update_details(self, track, upcoming) -> None:
+        self.details.update_context(track, upcoming, repeat=self.repeat_enabled())
+
+    def _notify_context_changed(self, *_args) -> None:
+        if self.on_context_changed:
+            self.on_context_changed()
+
+    def _configure_layout(self, compact: bool) -> None:
+        """Reflow existing controls without touching playback state."""
+        if getattr(self, "_compact_layout", None) == compact:
+            return
+        self._compact_layout = compact
+        padding = (16, 16) if compact else (70, 20)
+        for row in (self.top_row, self.progress_frame, self.transport_frame):
+            row.grid_configure(padx=padding)
+        self.top_row.grid_configure(padx=(88, 12) if compact else padding, pady=(8, 0) if compact else (18, 0))
+        self.card_frame.rowconfigure(0, minsize=72 if compact else 0)
+        self.progress_frame.grid_configure(pady=(4, 0) if compact else (14, 0))
+        self.transport_frame.grid_configure(pady=(6, 10) if compact else (12, 20))
+        size = 72 if compact else 166
+        self.vinyl_canvas.configure(width=size, height=size)
+        self.shadow_canvas.itemconfigure(self.vinyl_window, width=size, height=size)
+        self._draw_vinyl()
+        for button in (self.btn_prev, self.btn_next):
+            button.configure(width=3 if compact else 5)
+        self.btn_play_pause.configure(width=3 if compact else 4)
+        if compact:
+            self.secondary_frame.pack_forget()
+        else:
+            self.secondary_frame.pack(pady=(6, 0))
+
     def _rounded_rect(self, canvas, x1, y1, x2, y2, radius, **kwargs) -> None:
         points = [
             x1 + radius,
@@ -517,14 +576,39 @@ class PlayerControls(ttk.Frame):
             return
         canvas = self.vinyl_canvas
         canvas.delete("all")
-        size = 166
-        canvas.create_oval(10, 16, size - 10, size - 4, fill=self._player_vinyl_shadow, outline="")
+        size = 72 if getattr(self, "_compact_layout", False) else 166
+        scale = size / 166
+        canvas.create_oval(
+            10 * scale,
+            16 * scale,
+            size - 10 * scale,
+            size - 4 * scale,
+            fill=self._player_vinyl_shadow,
+            outline="",
+        )
         if self._cover_photo is None:
             self._cover_photo = self._cover_photo_from_file(None)
-        canvas.create_image(size // 2, size // 2, image=self._cover_photo)
-        canvas.create_oval(59, 59, 107, 107, fill=self._player_card, outline=self._player_border, width=2)
-        canvas.create_oval(77, 77, 89, 89, fill=self._player_border, outline="")
-        canvas.create_line(88, 90, 150, 145, fill=self._player_primary, width=2)
+        if size == 166:
+            photo = self._cover_photo
+        else:
+            if getattr(self, "_compact_cover_source", None) is not self._cover_photo:
+                cover = ImageTk.getimage(self._cover_photo)
+                cover_size = round(146 * scale)
+                self._compact_cover_photo = ImageTk.PhotoImage(cover.resize((cover_size, cover_size), Image.LANCZOS))
+                self._compact_cover_source = self._cover_photo
+            photo = self._compact_cover_photo
+        canvas.create_image(size / 2, size / 2, image=photo)
+        canvas.create_oval(
+            59 * scale,
+            59 * scale,
+            107 * scale,
+            107 * scale,
+            fill=self._player_card,
+            outline=self._player_border,
+            width=max(1, 2 * scale),
+        )
+        canvas.create_oval(77 * scale, 77 * scale, 89 * scale, 89 * scale, fill=self._player_border, outline="")
+        canvas.create_line(88 * scale, 90 * scale, 150 * scale, 145 * scale, fill=self._player_primary, width=2)
 
     def _register_tooltips(self) -> None:
         tooltip_targets = [
@@ -555,6 +639,7 @@ class PlayerControls(ttk.Frame):
 
     def refresh_theme(self) -> None:
         self._setup_styles()
+        self.details.refresh_theme()
         self.configure(style="Player.TFrame")
         self.main_frame.configure(style="Player.TFrame")
         self.card_frame.configure(style="PlayerCard.TFrame")
@@ -574,10 +659,13 @@ class PlayerControls(ttk.Frame):
             foreground=self._player_text,
             activebackground=self._player_primary,
             activeforeground=self._player_primary_text,
+            selectcolor=self._player_primary,
+            disabledforeground=self._player_disabled,
         )
         self._draw_player_shell()
         self._draw_vinyl()
         self._draw_progress()
+        self._draw_visualizer()
 
     def refresh_texts(self) -> None:
         self._setup_styles()
@@ -600,6 +688,8 @@ class PlayerControls(ttk.Frame):
         elif not self.playback.current_file:
             self.track_info_label.configure(text=self.t("player.no_track"))
         self._sync_time_display(self.playback.last_position)
+        self.details.t = self.t
+        self.details.render(repeat=self.repeat_enabled())
 
     def load_file(self, filepath: str) -> bool:
         try:

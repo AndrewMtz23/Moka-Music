@@ -122,12 +122,34 @@ def move_song_between_libraries(
 
     if not os.path.exists(source_path):
         return ActionResult.fail(t("action.file_no_longer_exists", path=source_path))
+    if os.path.exists(destination_path):
+        return ActionResult.fail(t("action.song_exists_destination", name=filename))
 
     try:
         shutil.move(source_path, destination_path)
+        track = origin_controller.get_track_info(filename)
+        manual = bool(track and track.is_manually_set)
+        locked = bool(track and track.is_track_locked)
+        try:
+            removed_number = int(track.metadata.get("track_number", "")) if track else None
+        except (TypeError, ValueError):
+            removed_number = None
         origin_controller.remove_file(filename)
         destination_controller.register_file(filename)
-        return ActionResult.ok(t("action.song_moved"), data={"filename": filename})
+        destination_controller.set_track_number_manual(filename, manual)
+        destination_controller.set_track_number_locked(filename, locked)
+        data = {"filename": filename}
+        if origin_controller.close_gaps_on_move:
+            compact = origin_controller.close_track_number_gap(removed_number)
+            data.update(compact.data or {})
+            if not compact.success:
+                return ActionResult(
+                    success=True,
+                    message=t("action.song_moved_numbering_partial"),
+                    data=data,
+                    errors=compact.errors,
+                )
+        return ActionResult.ok(t("action.song_moved"), data=data)
     except Exception as exc:
         logger.error("Error moving %s: %s", filename, exc)
         return ActionResult.fail(t("action.could_not_move", error=exc))
@@ -159,7 +181,22 @@ def delete_song(
                 os.unlink(filepath)
         else:
             os.unlink(filepath)
+        track = controller.get_track_info(filename)
+        try:
+            removed_number = int(track.metadata.get("track_number", "")) if track else None
+        except (TypeError, ValueError):
+            removed_number = None
         controller.remove_file(filename)
+        if controller.close_gaps_on_move:
+            compact = controller.close_track_number_gap(removed_number)
+            if not compact.success:
+                return ActionResult(
+                    success=True,
+                    message=t("action.song_deleted_numbering_partial"),
+                    data=compact.data,
+                    errors=compact.errors,
+                )
+            return ActionResult.ok(t("action.song_deleted"), data=compact.data)
         return ActionResult.ok(t("action.song_deleted"))
     except Exception as exc:
         logger.error("Error deleting %s: %s", filename, exc)

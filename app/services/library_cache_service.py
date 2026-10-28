@@ -5,14 +5,22 @@ import logging
 import sqlite3
 import time
 from contextlib import contextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator
 
 from ..constants import LIBRARY_CACHE_FILE_NAME
 from .track_scan_service import TrackScanResult
 
-SCANNER_VERSION = 1
+SCANNER_VERSION = 2
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class LibraryCacheSnapshot:
+    tracks: dict[str, TrackScanResult] = field(default_factory=dict)
+    manual_paths: set[str] = field(default_factory=set)
+    locked_paths: set[str] = field(default_factory=set)
 
 
 class LibraryCache:
@@ -55,22 +63,30 @@ class LibraryCache:
             return None
 
     def save_track(self, result: TrackScanResult) -> None:
-        path = Path(result.filepath)
-        stats = self._file_stats(path)
-        if stats is None:
+        self.save_tracks([result])
+
+    def save_tracks(
+        self,
+        results: list[TrackScanResult],
+        *,
+        expected_stats: dict[str, tuple[int, float]] | None = None,
+    ) -> None:
+        if not results:
             return
         try:
             self._ensure_schema()
-            with self._connection() as connection:
-                connection.execute(
-                    """
-                    INSERT OR REPLACE INTO track_cache (
-                        filepath, folder, filename, size, mtime, metadata_json,
-                        duration, audio_quality_json, has_cover_art, error,
-                        scanned_at, scanner_version
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
+            rows = []
+            for result in results:
+                path = Path(result.filepath)
+                stats = self._file_stats(path)
+                if stats is None:
+                    continue
+                if expected_stats is not None and expected_stats.get(result.filepath) != (
+                    stats["size"],
+                    stats["mtime"],
+                ):
+                    continue
+                rows.append(
                     (
                         self._normalize_path(path),
                         self._normalize_path(path.parent),
@@ -84,10 +100,63 @@ class LibraryCache:
                         result.error,
                         time.time(),
                         SCANNER_VERSION,
-                    ),
+                    )
+                )
+            with self._connection() as connection:
+                connection.executemany(
+                    """
+                    INSERT OR REPLACE INTO track_cache (
+                        filepath, folder, filename, size, mtime, metadata_json,
+                        duration, audio_quality_json, has_cover_art, error,
+                        scanned_at, scanner_version
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    rows,
                 )
         except Exception as exc:
-            logger.debug("Ignoring library cache write failure for %s: %s", path, exc)
+            logger.debug("Ignoring library cache batch write failure: %s", exc)
+
+    def get_folder_snapshot(self, folder: str | Path) -> LibraryCacheSnapshot:
+        """Read once, then validate files without holding a database connection."""
+        snapshot = LibraryCacheSnapshot()
+        normalized_folder = self._normalize_path(Path(folder))
+        # Lock state is authoritative: a database error must not silently unlock tracks.
+        self._ensure_schema()
+        with self._connection() as connection:
+            rows = connection.execute(
+                """SELECT filepath, filename, size, mtime, metadata_json, duration,
+                          audio_quality_json, has_cover_art, error
+                   FROM track_cache WHERE folder = ? AND scanner_version = ?""",
+                (normalized_folder, SCANNER_VERSION),
+            ).fetchall()
+            snapshot.manual_paths = {
+                row[0]
+                for row in connection.execute("SELECT filepath FROM manual_track_numbers")
+                if str(Path(row[0]).parent) == normalized_folder
+            }
+            snapshot.locked_paths = {
+                row[0]
+                for row in connection.execute("SELECT filepath FROM explicit_track_locks")
+                if str(Path(row[0]).parent) == normalized_folder
+            }
+        for row in rows:
+            try:
+                stats = self._file_stats(Path(row[0]))
+                if stats is None or stats["size"] != row[2] or stats["mtime"] != row[3]:
+                    continue
+                snapshot.tracks[row[1]] = TrackScanResult(
+                    filename=row[1],
+                    filepath=row[0],
+                    metadata=self._loads_dict(row[4]),
+                    duration=float(row[5] or 0.0),
+                    audio_quality=self._loads_dict(row[6]),
+                    has_cover_art=self._decode_bool(row[7]),
+                    error=str(row[8] or ""),
+                )
+            except (TypeError, ValueError) as exc:
+                logger.debug("Ignoring invalid cached metadata for %s: %s", row[0], exc)
+        return snapshot
 
     def invalidate_path(self, filepath: str | Path) -> None:
         try:
@@ -100,6 +169,32 @@ class LibraryCache:
         except Exception as exc:
             logger.debug("Ignoring library cache path invalidation failure for %s: %s", filepath, exc)
 
+    def is_track_number_manual(self, filepath: str | Path) -> bool:
+        self._ensure_schema()
+        with self._connection() as connection:
+            return (
+                connection.execute(
+                    "SELECT 1 FROM manual_track_numbers WHERE filepath = ?",
+                    (self._normalize_path(Path(filepath)),),
+                ).fetchone()
+                is not None
+            )
+
+    def set_track_number_manual(self, filepath: str | Path, manual: bool) -> None:
+        # User intent is independent of disposable scan-cache entries.
+        self._ensure_schema()
+        with self._connection() as connection:
+            if manual:
+                connection.execute(
+                    "INSERT OR IGNORE INTO manual_track_numbers (filepath) VALUES (?)",
+                    (self._normalize_path(Path(filepath)),),
+                )
+            else:
+                connection.execute(
+                    "DELETE FROM manual_track_numbers WHERE filepath = ?",
+                    (self._normalize_path(Path(filepath)),),
+                )
+
     def invalidate_folder(self, folder: str | Path) -> None:
         try:
             self._ensure_schema()
@@ -110,6 +205,27 @@ class LibraryCache:
                 )
         except Exception as exc:
             logger.debug("Ignoring library cache folder invalidation failure for %s: %s", folder, exc)
+
+    def is_track_number_locked(self, filepath: str | Path) -> bool:
+        self._ensure_schema()
+        with self._connection() as connection:
+            return (
+                connection.execute(
+                    "SELECT 1 FROM explicit_track_locks WHERE filepath = ?",
+                    (self._normalize_path(Path(filepath)),),
+                ).fetchone()
+                is not None
+            )
+
+    def set_track_number_locked(self, filepath: str | Path, locked: bool) -> None:
+        self._ensure_schema()
+        with self._connection() as connection:
+            query = (
+                "INSERT OR IGNORE INTO explicit_track_locks (filepath) VALUES (?)"
+                if locked
+                else "DELETE FROM explicit_track_locks WHERE filepath = ?"
+            )
+            connection.execute(query, (self._normalize_path(Path(filepath)),))
 
     def _ensure_schema(self) -> None:
         if self._initialized:
@@ -135,6 +251,9 @@ class LibraryCache:
                 """
             )
             connection.execute("CREATE INDEX IF NOT EXISTS idx_track_cache_folder ON track_cache(folder)")
+            connection.execute("CREATE TABLE IF NOT EXISTS manual_track_numbers (filepath TEXT PRIMARY KEY)")
+            # Older automatic/manual assignments are not explicit user locks.
+            connection.execute("CREATE TABLE IF NOT EXISTS explicit_track_locks (filepath TEXT PRIMARY KEY)")
         self._initialized = True
 
     @contextmanager

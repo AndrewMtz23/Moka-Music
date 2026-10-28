@@ -37,7 +37,7 @@ class LibraryUiController:
         controller,
         panel: Optional[dict[str, object]],
     ) -> None:
-        tree.delete(*tree.get_children())
+        rows = []
         duplicate_set = controller.duplicate_filenames() if controller and controller.carpeta else set()
         filter_mode = panel.get("filter_mode", FilterMode.ALL) if panel else FilterMode.ALL
         for index, filename in enumerate(files):
@@ -45,25 +45,34 @@ class LibraryUiController:
             issue_keys = self.issue_keys(controller, filename, duplicate_set)
             quality_badge = self.quality_badge(controller, filename) if filter_mode in QUALITY_BADGE_FILTERS else ""
             display_name = self.display_name_with_badges(display_name, issue_keys, quality_badge=quality_badge)
+            track = controller.get_track_info(filename) if controller else None
             full_path = os.path.join(controller.carpeta, filename) if controller and controller.carpeta else filename
             row_tag = "even_row" if (index + 1) % 2 == 0 else "odd_row"
             issue_tags = tuple(f"issue_{key}" for key in issue_keys)
-            tree.insert(
-                "",
-                "end",
-                text=display_name,
-                values=(self.display_track_number(controller, filename, index), full_path),
-                tags=(filename, row_tag, *issue_tags),
+            lock_tags = ("track_locked",) if track and track.is_track_locked else ()
+            rows.append(
+                {
+                    "text": display_name,
+                    "values": (self.display_track_number(controller, filename, index), full_path),
+                    "tags": (filename, row_tag, *issue_tags, *lock_tags),
+                }
             )
         if not files:
             message = self.empty_library_message(controller, panel)
-            tree.insert("", "end", text=message, values=("", ""), tags=("placeholder",))
+            rows.append({"text": message, "values": ("", ""), "tags": ("placeholder",)})
             self._show_empty_state(panel, message)
         else:
             self._hide_empty_state(panel)
-        self.apply_tree_colors(tree)
-        tree.xview_moveto(0)
-        tree.yview_moveto(0)
+        if isinstance(tree, LibraryListbox):
+            self.apply_tree_colors(tree)
+            tree.sync_items(rows)
+        else:
+            tree.delete(*tree.get_children())
+            for row in rows:
+                tree.insert("", "end", **row)
+            self.apply_tree_colors(tree)
+            tree.xview_moveto(0)
+            tree.yview_moveto(0)
 
     def refresh_library_tree(
         self,

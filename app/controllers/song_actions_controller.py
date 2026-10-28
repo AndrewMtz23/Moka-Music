@@ -109,6 +109,16 @@ class SongActions:
 
         menu = tk.Menu(parent, tearoff=0)
 
+        track = controller_origen.get_track_info(nombre_archivo)
+        locked = bool(track and track.is_track_locked)
+        menu.add_command(
+            label=self.t("context.unlock_track" if locked else "context.lock_track"),
+            command=lambda: self._emit_result(
+                on_result, controller_origen.change_track_number_lock(nombre_archivo, not locked)
+            ),
+        )
+        menu.add_separator()
+
         if controller_destino.carpeta:
             menu.add_command(
                 label=self.t("context.move_other"),

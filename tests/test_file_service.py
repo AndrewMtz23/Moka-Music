@@ -30,6 +30,24 @@ class FakeSongInfo:
 
 
 class FileServiceTests(unittest.TestCase):
+    def test_move_refuses_unindexed_destination_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source, destination = root / "source", root / "destination"
+            source.mkdir()
+            destination.mkdir()
+            (source / "song.mp3").write_bytes(b"source audio")
+            (destination / "song.mp3").write_bytes(b"existing audio")
+            origin = MetadataController()
+            origin.carpeta = str(source)
+            origin.archivos = ["song.mp3"]
+            target = MetadataController()
+            target.carpeta = str(destination)
+            result = move_song_between_libraries(origin, target, "song.mp3")
+            self.assertFalse(result.success)
+            self.assertEqual((source / "song.mp3").read_bytes(), b"source audio")
+            self.assertEqual((destination / "song.mp3").read_bytes(), b"existing audio")
+
     def test_sanitize_filename_replaces_invalid_chars(self):
         self.assertEqual(sanitize_filename(' a<b>c:"d"/e\\f|g?h* '), "a_b_c__d__e_f_g_h_")
 

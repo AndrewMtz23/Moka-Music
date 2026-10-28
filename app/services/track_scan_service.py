@@ -87,7 +87,9 @@ def _metadata_from_easy_audio(audio, path: Path) -> dict[str, str]:
         "album": _first_value(audio, "album"),
         "title": _first_value(audio, "title") or path.stem,
         "year": _first_value(audio, "date"),
-        "track_number": _first_value(audio, "tracknumber") or "0",
+        # ID3 TRCK can contain "track/total" (eyeD3 writes e.g. "210/00").
+        # The library and editor work with the track component, not the total.
+        "track_number": _first_value(audio, "tracknumber").split("/", 1)[0].strip() or "0",
         "genre": _first_value(audio, "genre"),
         "comment": _first_value(audio, "comment"),
     }

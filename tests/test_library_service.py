@@ -1,4 +1,6 @@
 import unittest
+from difflib import SequenceMatcher
+from unittest.mock import patch
 
 from app.models import FilterMode, SortMode, TrackInfo
 from app.services.library_service import (
@@ -7,6 +9,8 @@ from app.services.library_service import (
     BITRATE_256_MIN_KBPS,
     BITRATE_320_MIN_KBPS,
     filter_files,
+    fuzzy_duplicate_filenames,
+    fuzzy_duplicate_key_for,
     natural_filename_key,
     quality_report,
     sort_files,
@@ -19,6 +23,31 @@ def track(filename: str, metadata: dict[str, str], duration: float = 0.0, qualit
 
 
 class LibraryServiceTests(unittest.TestCase):
+    def test_fuzzy_duplicate_optimization_matches_exhaustive_comparison(self):
+        titles = ["Song", "Song!", "Song Live", "Song Live!", "Other", "A very long unrelated title", "", "Song"]
+        files = [f"{index}.mp3" for index in range(len(titles))]
+        cache = {
+            name: track(name, {"artist": "Artist", "title": title}) for name, title in zip(files, titles, strict=True)
+        }
+        for threshold in (0.0, 0.5, 0.92, 1.0):
+            expected = set()
+            for index, name in enumerate(files):
+                key = fuzzy_duplicate_key_for(name, cache[name].metadata)
+                for other in files[index + 1 :]:
+                    other_key = fuzzy_duplicate_key_for(other, cache[other].metadata)
+                    if key and other_key and SequenceMatcher(None, key, other_key).ratio() >= threshold:
+                        expected.update((name, other))
+            self.assertEqual(fuzzy_duplicate_filenames(files, cache, threshold), expected)
+
+    def test_fuzzy_duplicates_skip_pairs_already_classified(self):
+        files = [f"{index}.mp3" for index in range(20)]
+        cache = {name: track(name, {"title": "Same", "artist": "Same"}) for name in files}
+        original = SequenceMatcher.ratio
+        with patch.object(SequenceMatcher, "ratio", autospec=True, side_effect=original) as ratio:
+            result = fuzzy_duplicate_filenames(files, cache)
+        self.assertEqual(result, set(files))
+        self.assertLessEqual(ratio.call_count, len(files))
+
     def setUp(self):
         self.files = ["b.mp3", "a.mp3", "c.mp3", "d.mp3"]
         self.cache = {

@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+from collections import deque
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -19,7 +20,8 @@ from ..services.library_service import filter_files as filter_library_files
 from ..services.library_stats_service import build_library_stats
 from ..services.metadata_editor_service import MetadataEditor
 from ..services.playback_history_service import normalize_history_path
-from ..services.track_scan_service import scan_track
+from ..services.track_number_service import plan_gap_closure
+from ..services.track_scan_service import TrackScanResult, scan_track
 
 
 class MetadataController:
@@ -27,6 +29,7 @@ class MetadataController:
         self,
         translator: Optional[Callable[..., str]] = None,
         library_cache: Optional[LibraryCache] = None,
+        close_gaps_on_move: bool = False,
     ) -> None:
         self.t = translator or I18n().t
         self.archivos: list[str] = []
@@ -44,6 +47,7 @@ class MetadataController:
         self.logger = logging.getLogger(__name__)
         self.metadata_editor = MetadataEditor()
         self.library_cache = library_cache or LibraryCache()
+        self.close_gaps_on_move = close_gaps_on_move
 
     def set_translator(self, translator: Callable[..., str]) -> None:
         self.t = translator
@@ -71,16 +75,33 @@ class MetadataController:
         slowest_scans: list[dict[str, object]] = []
         cache_hits = 0
         cache_misses = 0
+        snapshot = self.library_cache.get_folder_snapshot(self.carpeta)
+        pending_scans: list[TrackScanResult] = []
+        expected_stats: dict[str, tuple[int, float]] = {}
         for item in audio_items:
             self.archivos.append(item.name)
             item_start = time.perf_counter()
-            cache_hit = self._precache_metadata(item.name)
-            if cache_hit:
+            scan = snapshot.tracks.get(item.name)
+            if scan is not None:
                 cache_hits += 1
             else:
                 cache_misses += 1
+                try:
+                    stats = item.stat()
+                    expected_stats[str(item)] = (stats.st_size, stats.st_mtime)
+                except OSError:
+                    pass  # Missing files are displayed as scan errors, never cached.
+                scan = scan_track(str(item))
+                pending_scans.append(scan)
+            self._cache_scan(
+                item.name,
+                scan,
+                str(item.resolve()) in snapshot.manual_paths,
+                str(item.resolve()) in snapshot.locked_paths,
+            )
             scan_elapsed = time.perf_counter() - item_start
             slowest_scans.append({"filename": item.name, "seconds": round(scan_elapsed, 4)})
+        self.library_cache.save_tracks(pending_scans, expected_stats=expected_stats)
         scan_elapsed = time.perf_counter() - scan_start
 
         sort_start = time.perf_counter()
@@ -152,6 +173,8 @@ class MetadataController:
         self._apply_sorting()
 
     def remove_file(self, filename: str) -> None:
+        self.set_track_number_locked(filename, False)
+        self.set_track_number_manual(filename, False)
         self._invalidate_file_cache(filename)
         if filename in self.archivos:
             self.archivos.remove(filename)
@@ -161,6 +184,13 @@ class MetadataController:
         self._invalidate_duplicate_cache()
 
     def rename_file(self, old_name: str, new_name: str) -> None:
+        track = self.get_track_info(old_name)
+        manual = bool(track and track.is_manually_set)
+        locked = bool(track and track.is_track_locked)
+        self.set_track_number_locked(new_name, locked)
+        self.set_track_number_locked(old_name, False)
+        self.set_track_number_manual(new_name, manual)
+        self.set_track_number_manual(old_name, False)
         self._invalidate_file_cache(old_name)
         self._invalidate_file_cache(new_name)
         if old_name in self.archivos:
@@ -181,18 +211,28 @@ class MetadataController:
         if scan is None:
             scan = scan_track(filepath)
             self.library_cache.save_track(scan)
+        self._cache_scan(
+            filename,
+            scan,
+            self.library_cache.is_track_number_manual(filepath),
+            self.library_cache.is_track_number_locked(filepath),
+        )
+        return cache_hit
+
+    def _cache_scan(self, filename: str, scan: TrackScanResult, manual: bool, locked: bool = False) -> None:
         self._metadata_cache[filename] = TrackInfo(
             filename=filename,
-            filepath=filepath,
+            filepath=os.path.join(self.carpeta, filename),
             metadata=scan.metadata,
             duration=scan.duration,
             cover_art=None,
             audio_quality=scan.audio_quality,
+            is_manually_set=manual,
+            is_track_locked=locked,
         )
         if scan.has_cover_art is not None:
             self._cover_cache[filename] = bool(scan.has_cover_art)
         self._invalidate_file_derived_cache(filename)
-        return cache_hit
 
     def _invalidate_file_cache(self, filename: str) -> None:
         if not self.carpeta or not filename:
@@ -248,6 +288,8 @@ class MetadataController:
     def aplicar_cambios(self, metadatos: dict[str, str]) -> tuple[int, list[str]]:
         if not self.archivos:
             return 0, ["No hay archivos para procesar."]
+        if "track_number" in metadatos:
+            return self.aplicar_cambios_a_archivos(self.archivos, metadatos, self.portada_path)
         rutas = [os.path.join(self.carpeta, filename) for filename in self.archivos]
         success_count, errors = self.metadata_editor.aplicar_metadatos_en_lote(
             rutas,
@@ -383,6 +425,8 @@ class MetadataController:
 
         self._invalidate_file_cache(filename)
         self._precache_metadata(filename, force_rescan=True)
+        if "track_number" in metadatos:
+            self.set_track_number_manual(filename, bool(str(metadatos["track_number"]).strip()))
         self._apply_sorting()
         return ActionResult.ok(
             self.t("message.song_metadata_saved"),
@@ -403,11 +447,16 @@ class MetadataController:
         if not validation.success:
             return 0, [validation.message]
 
-        if "track_number" in metadatos and len(selected) == 1:
-            result = self.aplicar_cambios_a_archivo(selected[0], metadatos, portada_path)
-            if result.success:
-                return 1, []
-            return 0, result.errors or [result.message]
+        if "track_number" in metadatos:
+            success_count = 0
+            errors: list[str] = []
+            for filename in selected:
+                result = self.aplicar_cambios_a_archivo(filename, metadatos, portada_path)
+                if result.success:
+                    success_count += 1
+                else:
+                    errors.extend(result.errors or [result.message])
+            return success_count, errors
 
         rutas = [os.path.join(self.carpeta, filename) for filename in selected]
         success_count, errors = self.metadata_editor.aplicar_metadatos_en_lote(
@@ -430,35 +479,42 @@ class MetadataController:
         if target_number < 0:
             return ActionResult.ok("", data={"shifted_filenames": []})
 
-        current_number = self._track_number_for_file(edited_filename)
-        if current_number == target_number:
-            return ActionResult.ok("", data={"shifted_filenames": []})
-
-        affected: list[tuple[int, str]] = []
+        occupied: dict[int, list[str]] = {}
+        locked: set[int] = set()
         for filename in self.archivos:
             if filename == edited_filename:
                 continue
             number = self._track_number_for_file(filename)
             if number is None:
                 continue
-            if current_number is not None and current_number > target_number:
-                should_shift = target_number <= number < current_number
+            if self._is_track_number_manual(filename):
+                locked.add(number)
             else:
-                should_shift = number >= target_number
-            if should_shift:
-                affected.append((number, filename))
+                occupied.setdefault(number, []).append(filename)
+
+        # Follow only actual collisions; the first gap ends the displacement.
+        pending = deque(occupied.pop(target_number, []))
+        affected: list[tuple[int, str]] = []
+        candidate = target_number + 1
+        while pending:
+            filename = pending.popleft()
+            while candidate in locked:
+                candidate += 1
+            pending.extend(occupied.pop(candidate, []))
+            affected.append((candidate, filename))
+            candidate += 1
 
         shifted: list[str] = []
         errors: list[str] = []
-        for number, filename in sorted(affected, reverse=True):
+        for new_number, filename in reversed(affected):
             filepath = os.path.join(self.carpeta, filename)
-            new_number = number + 1
             success, file_errors = self.metadata_editor.aplicar_metadatos_en_lote(
                 [filepath],
                 {"track_number": str(new_number)},
             )
             if success:
                 shifted.append(filename)
+                self._invalidate_file_cache(filename)
                 self._set_cached_track_number(filename, new_number)
             else:
                 errors.extend(file_errors or [filename])
@@ -482,6 +538,34 @@ class MetadataController:
         except (TypeError, ValueError):
             return None
         return number if number >= 0 else None
+
+    def _is_track_number_manual(self, filename: str) -> bool:
+        cached = self._metadata_cache.get(filename)
+        return bool(cached and (cached.is_manually_set or cached.is_track_locked))
+
+    def set_track_number_manual(self, filename: str, manual: bool = True) -> None:
+        self.library_cache.set_track_number_manual(os.path.join(self.carpeta, filename), manual)
+        cached = self._metadata_cache.get(filename)
+        if cached:
+            cached.is_manually_set = manual
+
+    def set_track_number_locked(self, filename: str, locked: bool) -> None:
+        self.library_cache.set_track_number_locked(os.path.join(self.carpeta, filename), locked)
+        cached = self._metadata_cache.get(filename)
+        if cached:
+            cached.is_track_locked = locked
+
+    def change_track_number_lock(self, filename: str, locked: bool) -> ActionResult:
+        if filename not in self.archivos or (locked and self._track_number_for_file(filename) is None):
+            return ActionResult.fail(self.t("message.lock_needs_number"))
+        try:
+            self.set_track_number_locked(filename, locked)
+        except Exception as exc:
+            return ActionResult.fail(self.t("message.lock_failed"), errors=[str(exc)])
+        return ActionResult.ok(
+            self.t("message.track_locked" if locked else "message.track_unlocked"),
+            data={"track_lock_changed": True},
+        )
 
     def _set_cached_track_number(self, filename: str, track_number: int) -> None:
         cached = self._metadata_cache.get(filename)
@@ -531,7 +615,20 @@ class MetadataController:
 
         errors: list[str] = []
         success_count = 0
-        for index, filename in enumerate(self.archivos, start=0):
+        reserved = {
+            self._track_number_for_file(filename)
+            for filename in self.archivos
+            if self._is_track_number_manual(filename)
+        }
+        index = 0
+        for filename in self.archivos:
+            if self._is_track_number_manual(filename):
+                continue
+            while index in reserved:
+                index += 1
+            if self._track_number_for_file(filename) == index:
+                index += 1
+                continue
             filepath = os.path.join(self.carpeta, filename)
             success, file_errors = self.metadata_editor.aplicar_metadatos_en_lote(
                 [filepath],
@@ -543,6 +640,7 @@ class MetadataController:
                 self._precache_metadata(filename, force_rescan=True)
             else:
                 errors.extend(file_errors or [filename])
+            index += 1
 
         if errors:
             return ActionResult.fail(
@@ -550,6 +648,34 @@ class MetadataController:
                 errors=errors,
             )
         return ActionResult.ok(self.t("message.track_order_updated", count=success_count))
+
+    def close_track_number_gap(self, removed_number: int | None) -> ActionResult:
+        # Removing a song closes its local gap unless the user explicitly locked
+        # a remaining row. Legacy manual assignments still protect reordering,
+        # but must not act as invisible locks during removal.
+        tracks = [
+            (filename, number, bool((track := self.get_track_info(filename)) and track.is_track_locked))
+            for filename in self.archivos
+            if (number := self._track_number_for_file(filename)) is not None
+        ]
+        shifted = []
+        for filename, number in plan_gap_closure(tracks, removed_number):
+            success, errors = self.metadata_editor.aplicar_metadatos_en_lote(
+                [os.path.join(self.carpeta, filename)], {"track_number": str(number)}
+            )
+            if not success:
+                self._apply_sorting()
+                return ActionResult.fail(
+                    self.t("message.track_order_partial", count=len(shifted)),
+                    errors=errors or [filename],
+                    data={"shifted_filenames": shifted},
+                )
+            self._invalidate_file_cache(filename)
+            self._set_cached_track_number(filename, number)
+            self._invalidate_file_derived_cache(filename)
+            shifted.append(filename)
+        self._apply_sorting()
+        return ActionResult.ok("", data={"shifted_filenames": shifted})
 
     def filter_files(self, query: str = "", mode: FilterMode = FilterMode.ALL) -> list[str]:
         return filter_library_files(

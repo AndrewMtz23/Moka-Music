@@ -20,6 +20,37 @@ class PlaybackSelectionController:
     ) -> None:
         self.filename_from_item = filename_from_item
         self.chooser = chooser or random.choice
+        self._shuffle_signature = None
+        self._shuffle_current = None
+        self._shuffle_queue = []
+
+    def upcoming_items(self, tree, *, current_filename: str, shuffle: bool) -> list[object]:
+        """Plan the same next five tracks that navigation will consume."""
+        items = {self.filename_from_item(tree.item(item)): item for item in tree.get_children()}
+        items.pop("", None)
+        if current_filename not in items:
+            return []
+        filenames = list(items)
+        if not shuffle:
+            self._shuffle_signature = None
+            start = filenames.index(current_filename) + 1
+            return [items[name] for name in filenames[start : start + 5]]
+        signature = (id(tree), tuple(filenames))
+        if signature != self._shuffle_signature:
+            self._shuffle_queue = []
+        elif current_filename != self._shuffle_current:
+            if current_filename in self._shuffle_queue:
+                self._shuffle_queue = self._shuffle_queue[self._shuffle_queue.index(current_filename) + 1 :]
+            else:
+                self._shuffle_queue = []
+        self._shuffle_signature = signature
+        self._shuffle_current = current_filename
+        candidates = [name for name in filenames if name != current_filename and name not in self._shuffle_queue]
+        while candidates and len(self._shuffle_queue) < 5:
+            chosen = self.chooser(candidates)
+            self._shuffle_queue.append(chosen)
+            candidates.remove(chosen)
+        return [items[name] for name in self._shuffle_queue]
 
     def selected_track(self, controller, tree) -> Optional[PlaybackSelection]:
         selection = tree.selection()

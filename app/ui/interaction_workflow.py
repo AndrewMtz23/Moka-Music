@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from pathlib import Path
 from tkinter import messagebox
 
@@ -25,6 +26,7 @@ class InteractionWorkflowMixin:
             self._playback_tree = tree
             self.player.play()
             self._record_playback(controller, selected.filename, selected.filepath)
+            self._refresh_player_details()
             self.logger.info("Playing %s", selected.filename)
 
     def _record_playback(self, controller: MetadataController, filename: str, filepath: str) -> None:
@@ -43,11 +45,20 @@ class InteractionWorkflowMixin:
         controller = self._playback_controller
         if tree is None or controller is None:
             return
-        target_item = self._playback_selection_controller().relative_item(
-            tree,
-            offset=offset,
-            shuffle=self.player.shuffle_enabled(),
-        )
+        navigation = self._playback_selection_controller()
+        filename = os.path.basename(self.player.playback.current_file or "")
+        if offset == 1:
+            upcoming = navigation.upcoming_items(tree, current_filename=filename, shuffle=self.player.shuffle_enabled())
+            target_item = upcoming[0] if upcoming else None
+        else:
+            children = list(tree.get_children())
+            current = next(
+                (i for i, item in enumerate(children) if self._filename_from_tree_item(tree.item(item)) == filename),
+                None,
+            )
+            target_item = (
+                children[current + offset] if current is not None and 0 <= current + offset < len(children) else None
+            )
         if target_item is None:
             return
         self._select_and_play(controller, tree, target_item)
@@ -57,6 +68,50 @@ class InteractionWorkflowMixin:
             self.player.restart_current_track()
             return
         self._play_relative_track(1)
+
+    def _refresh_player_details(self) -> None:
+        player = getattr(self, "player", None)
+        if player is None:
+            return
+        controller = getattr(self, "_playback_controller", None)
+        tree = getattr(self, "_playback_tree", None)
+        filename = os.path.basename(player.playback.current_file or "")
+        track = controller.get_track_info(filename) if controller and filename else None
+        upcoming = []
+        if track and tree is not None:
+            if player.repeat_enabled():
+                upcoming = [track]
+            else:
+                for item in self._playback_selection_controller().upcoming_items(
+                    tree, current_filename=filename, shuffle=player.shuffle_enabled()
+                ):
+                    name = self._filename_from_tree_item(tree.item(item))
+                    info = controller.get_track_info(name)
+                    if info:
+                        upcoming.append(info)
+        # Read artwork only for the current track and the five upcoming queue rows.
+        # TrackInfo objects are replaced by the library scanner after metadata edits.
+        previous = getattr(self, "_player_detail_covers", {})
+        covers = {}
+
+        def with_cover(info):
+            cached = previous.get(info.filepath)
+            if cached and cached[0] is info:
+                cover = cached[1]
+            else:
+                try:
+                    cover = (
+                        controller.metadata_editor.obtener_portada(info.filepath)
+                        if controller._has_cover_art(info.filename)
+                        else None
+                    )
+                except Exception:
+                    cover = None
+            covers[info.filepath] = (info, cover)
+            return replace(info, cover_art=cover)
+
+        player.update_details(with_cover(track) if track else None, [with_cover(info) for info in upcoming])
+        self._player_detail_covers = covers
 
     def _select_and_play(self, controller: MetadataController, tree, item_id) -> None:
         tree.selection_set(item_id)
@@ -117,7 +172,22 @@ class InteractionWorkflowMixin:
             if isinstance(moved_filename, str):
                 self._position_moved_song_in_main(moved_filename)
 
-    def _move_between_libraries_by_drag(
+    def _move_to_incoming(self) -> None:
+        selection = self.tree_principal.selection()
+        if not selection:
+            messagebox.showwarning(self.t("dialog.selection"), self.t("message.select_song_to_move"))
+            return
+        filename = self._filename_from_tree_item(self.tree_principal.item(selection[0]))
+        if filename:
+            self._transfer_song_between_libraries(
+                self.controller_principal,
+                self.tree_principal,
+                self.controller_nueva,
+                self.tree_nueva,
+                filename,
+            )
+
+    def _transfer_song_between_libraries(
         self,
         origin_controller: MetadataController,
         origin_tree,
@@ -157,16 +227,12 @@ class InteractionWorkflowMixin:
             total=total,
             initial=max(0, total - 1),
             min_position=0,
-            max_position=max(0, total - 1),
+            max_position=max(9999, total - 1),
         )
         if position is None:
             self._select_filename_in_tree(self.tree_principal, filename)
             return
-        order = [name for name in self.controller_principal.archivos if name != filename]
-        insert_at = max(0, min(int(position), len(order)))
-        order[insert_at:insert_at] = [filename]
-        self.controller_principal.reorder_files(order)
-        result = self.controller_principal.apply_track_numbers_from_order()
+        result = self.controller_principal.aplicar_cambios_a_archivo(filename, {"track_number": str(position)})
         for name in self.controller_principal.archivos:
             self.song_info.invalidate(os.path.join(self.controller_principal.carpeta, name))
         self.controller_principal.set_sort_mode(SortMode.TRACK_NUMBER)
@@ -474,7 +540,12 @@ class InteractionWorkflowMixin:
                 self._refresh_library_tree(self.controller_principal, self.tree_principal)
             if hasattr(self, "tree_nueva"):
                 self._refresh_library_tree(self.controller_nueva, self.tree_nueva)
-            messagebox.showinfo(self.t("dialog.done"), result.message)
+            if result.errors:
+                messagebox.showwarning(self.t("dialog.done"), result.message + "\n\n" + "\n".join(result.errors))
+            elif result.data and result.data.get("track_lock_changed"):
+                self._show_toast(result.message, kind="success")
+            else:
+                messagebox.showinfo(self.t("dialog.done"), result.message)
         else:
             detail = self._format_action_error(result)
             messagebox.showerror(self.t("dialog.error"), detail)

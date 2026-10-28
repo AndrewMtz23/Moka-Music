@@ -34,6 +34,11 @@ class FakeController:
 
 
 class UiTextControllerTests(unittest.TestCase):
+    def test_return_button_tracks_language_changes(self):
+        widget = FakeWidget()
+        UiTextController(fake_t).refresh_text_widgets({"move_to_incoming_button": widget})
+        self.assertEqual(widget.options["text"], "button.move_to_incoming")
+
     def test_refresh_text_widgets_uses_registered_keys(self):
         widget = FakeWidget()
 
