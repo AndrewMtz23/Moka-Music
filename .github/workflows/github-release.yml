@@ -43,7 +43,15 @@ jobs:
         run: |
           $tag = "${{ steps.version.outputs.tag }}"
           git fetch --tags --quiet
-          if (git rev-parse -q --verify "refs/tags/$tag") {
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not fetch release tags"
+          }
+          # An absent tag is expected for a new release, not a failed command.
+          $existingTag = git tag --list -- "$tag"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not inspect release tags"
+          }
+          if ($existingTag) {
             "exists=true" >> $env:GITHUB_OUTPUT
           } else {
             "exists=false" >> $env:GITHUB_OUTPUT
