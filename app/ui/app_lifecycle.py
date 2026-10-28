@@ -868,5 +868,6 @@ class AppLifecycleMixin:
         except Exception as exc:
             self.logger.error("Error while closing app: %s", exc)
         finally:
+            self.taskbar.close()
             self.root.quit()
             self.root.destroy()

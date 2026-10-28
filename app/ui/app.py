@@ -21,6 +21,7 @@ from ..controllers.playback_selection_controller import PlaybackSelectionControl
 from ..controllers.rename_controller import RenameController
 from ..controllers.selection_controller import SelectionController
 from ..controllers.song_actions_controller import SongActions
+from ..controllers.taskbar_controller import TaskbarController
 from ..controllers.ui_text_controller import UiTextController
 from ..controllers.undo_controller import UndoController
 from ..i18n import I18n
@@ -117,6 +118,16 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         self._library_load_queue: queue.Queue = queue.Queue()
 
         self._setup_main_menu()
+        self.taskbar = TaskbarController(
+            self.root,
+            state=lambda: self.player.playback.state() if hasattr(self, "player") else None,
+            commands={
+                "previous": lambda: self.player.previous_track(),
+                "toggle": lambda: self.player.toggle_play_pause(),
+                "next": lambda: self.player.next_track(),
+            },
+            translator=lambda key: self.t(key),
+        )
         self._setup_ui()
         self._setup_cover_workflow()
         self._setup_playlist_workflow()
