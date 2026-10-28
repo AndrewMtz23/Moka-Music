@@ -3,6 +3,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import eyed3.id3
+from mutagen.easyid3 import EasyID3
 from mutagen.mp4 import MP4Cover
 
 from app.services.track_scan_service import scan_track
@@ -32,6 +34,22 @@ class FakeFullAudio:
 
 
 class TrackScanServiceTests(unittest.TestCase):
+    def test_reads_track_number_written_by_metadata_editor_without_total(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "song.mp3"
+            path.write_bytes(b"")
+            tag = eyed3.id3.Tag()
+            tag.track_num = (210, 0)
+            tag.save(str(path), version=eyed3.id3.ID3_V2_3)
+            easy_audio = EasyID3(path)
+            self.assertEqual(easy_audio["tracknumber"], ["210/00"])
+            with patch(
+                "app.services.track_scan_service.mutagen.File",
+                side_effect=lambda _path, easy=False: easy_audio if easy else FakeFullAudio(),
+            ):
+                result = scan_track(path)
+            self.assertEqual(result.metadata["track_number"], "210")
+
     def test_scan_track_combines_metadata_quality_duration_and_cover(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "song.m4a"

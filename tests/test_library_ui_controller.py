@@ -118,6 +118,15 @@ class LibraryUiControllerTests(unittest.TestCase):
             self.assertEqual(tree.x_position, 0)
             self.assertEqual(tree.y_position, 0)
 
+            controller.get_track_info("song.mp3").is_manually_set = True
+            self.make_controller().update_treeview(tree=tree, files=["song.mp3"], controller=controller, panel=None)
+            self.assertNotIn("track_locked", tree.items[0]["tags"])
+            controller.get_track_info("song.mp3").is_track_locked = True
+            self.make_controller().update_treeview(tree=tree, files=["song.mp3"], controller=controller, panel=None)
+            self.assertIn("track_locked", tree.items[0]["tags"])
+            self.assertNotIn("\N{LOCK}", tree.items[0]["text"])
+            self.assertEqual(filename_from_item(tree.items[0]), "song.mp3")
+
     def test_refresh_tree_applies_search_and_updates_result_label(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             controller = MetadataController()

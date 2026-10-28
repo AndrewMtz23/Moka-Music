@@ -117,7 +117,22 @@ class InteractionWorkflowMixin:
             if isinstance(moved_filename, str):
                 self._position_moved_song_in_main(moved_filename)
 
-    def _move_between_libraries_by_drag(
+    def _move_to_incoming(self) -> None:
+        selection = self.tree_principal.selection()
+        if not selection:
+            messagebox.showwarning(self.t("dialog.selection"), self.t("message.select_song_to_move"))
+            return
+        filename = self._filename_from_tree_item(self.tree_principal.item(selection[0]))
+        if filename:
+            self._transfer_song_between_libraries(
+                self.controller_principal,
+                self.tree_principal,
+                self.controller_nueva,
+                self.tree_nueva,
+                filename,
+            )
+
+    def _transfer_song_between_libraries(
         self,
         origin_controller: MetadataController,
         origin_tree,
@@ -157,16 +172,12 @@ class InteractionWorkflowMixin:
             total=total,
             initial=max(0, total - 1),
             min_position=0,
-            max_position=max(0, total - 1),
+            max_position=max(9999, total - 1),
         )
         if position is None:
             self._select_filename_in_tree(self.tree_principal, filename)
             return
-        order = [name for name in self.controller_principal.archivos if name != filename]
-        insert_at = max(0, min(int(position), len(order)))
-        order[insert_at:insert_at] = [filename]
-        self.controller_principal.reorder_files(order)
-        result = self.controller_principal.apply_track_numbers_from_order()
+        result = self.controller_principal.aplicar_cambios_a_archivo(filename, {"track_number": str(position)})
         for name in self.controller_principal.archivos:
             self.song_info.invalidate(os.path.join(self.controller_principal.carpeta, name))
         self.controller_principal.set_sort_mode(SortMode.TRACK_NUMBER)
@@ -474,7 +485,12 @@ class InteractionWorkflowMixin:
                 self._refresh_library_tree(self.controller_principal, self.tree_principal)
             if hasattr(self, "tree_nueva"):
                 self._refresh_library_tree(self.controller_nueva, self.tree_nueva)
-            messagebox.showinfo(self.t("dialog.done"), result.message)
+            if result.errors:
+                messagebox.showwarning(self.t("dialog.done"), result.message + "\n\n" + "\n".join(result.errors))
+            elif result.data and result.data.get("track_lock_changed"):
+                self._show_toast(result.message, kind="success")
+            else:
+                messagebox.showinfo(self.t("dialog.done"), result.message)
         else:
             detail = self._format_action_error(result)
             messagebox.showerror(self.t("dialog.error"), detail)

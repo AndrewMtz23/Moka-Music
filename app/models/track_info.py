@@ -10,3 +10,5 @@ class TrackInfo:
     duration: float
     cover_art: Optional[bytes]
     audio_quality: dict[str, object] = field(default_factory=dict)
+    is_manually_set: bool = False
+    is_track_locked: bool = False

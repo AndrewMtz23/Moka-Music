@@ -1,4 +1,5 @@
 import tkinter as tk
+from difflib import SequenceMatcher
 from typing import Callable, Optional
 
 
@@ -17,6 +18,17 @@ class LibraryListbox(tk.Listbox):
         self._tag_styles: dict[str, dict[str, str]] = {}
         self._selected_index: Optional[int] = None
         self._placeholder_visible = False
+        self._scroll_callback = None
+        self.lock_gutter = tk.Canvas(parent, width=26, highlightthickness=0, borderwidth=0)
+        super().configure(yscrollcommand=self._on_scroll)
+        super().bind("<Configure>", lambda _event: self._draw_locks(), add="+")
+        for sequence in ("<ButtonPress-1>", "<ButtonRelease-1>", "<B1-Motion>", "<ButtonPress-3>"):
+            self.lock_gutter.bind(
+                sequence,
+                lambda event, sequence=sequence: self.event_generate(sequence, x=1, y=event.y, state=event.state),
+            )
+        self.lock_gutter.bind("<MouseWheel>", lambda event: self.event_generate("<MouseWheel>", delta=event.delta))
+        self.bind("<Destroy>", self._destroy_gutter, add="+")
         self.tag_configure("selected", background="#111111", foreground="#ffffff")
         super().bind("<<ListboxSelect>>", self._sync_selected_index, add="+")
 
@@ -34,6 +46,7 @@ class LibraryListbox(tk.Listbox):
         self._selected_index = None
         self._placeholder_visible = False
         super().delete(0, "end")
+        self._draw_locks()
 
     def show_placeholder(self, message: str) -> None:
         self._items.clear()
@@ -50,6 +63,7 @@ class LibraryListbox(tk.Listbox):
         self._placeholder_visible = False
         super().insert("end", self._format_item(text, values))
         self._paint_item(len(self._items) - 1)
+        self._draw_locks()
         return item_id
 
     def item(self, item_id) -> dict[str, object]:
@@ -57,6 +71,69 @@ class LibraryListbox(tk.Listbox):
             return self._items[int(item_id)]
         except (IndexError, ValueError, TypeError):
             return {"text": "", "values": (), "tags": ()}
+
+    def sync_items(self, items: list[dict[str, object]]) -> None:
+        """Reconcile library rows without rebuilding unchanged native list entries."""
+        if self._items == items:
+            return
+        old_items = self._items
+        old_keys = [item["tags"][0] for item in old_items]
+        new_keys = [item["tags"][0] for item in items]
+        selected = {old_keys[int(index)] for index in self.selection()}
+        anchor_index = self.index("anchor")
+        anchor_key = old_keys[anchor_index] if 0 <= anchor_index < len(old_keys) else None
+        focused = (
+            old_keys[self._selected_index]
+            if self._selected_index is not None and self._selected_index < len(old_keys)
+            else None
+        )
+        top_key = old_keys[self.nearest(0)] if old_keys else None
+        old_by_key = dict(zip(old_keys, old_items, strict=True))
+        repaint = set()
+
+        if self._placeholder_visible:
+            tk.Listbox.delete(self, 0, "end")
+        for operation, old_start, old_end, new_start, new_end in reversed(
+            SequenceMatcher(a=old_keys, b=new_keys, autojunk=False).get_opcodes()
+        ):
+            if operation == "equal":
+                for old_index, new_index in zip(range(old_start, old_end), range(new_start, new_end), strict=True):
+                    before, after = old_items[old_index], items[new_index]
+                    if self._format_item(before["text"], before["values"]) != self._format_item(
+                        after["text"], after["values"]
+                    ):
+                        tk.Listbox.delete(self, old_index)
+                        tk.Listbox.insert(self, old_index, self._format_item(after["text"], after["values"]))
+                        repaint.add(new_index)
+            else:
+                if old_end > old_start:
+                    tk.Listbox.delete(self, old_start, old_end - 1)
+                if new_end > new_start:
+                    tk.Listbox.insert(
+                        self,
+                        old_start,
+                        *[self._format_item(item["text"], item["values"]) for item in items[new_start:new_end]],
+                    )
+                    repaint.update(range(new_start, new_end))
+
+        self._items = [dict(item) for item in items]
+        self._placeholder_visible = False
+        self._selected_index = None
+        tk.Listbox.selection_clear(self, 0, "end")
+        for index, item in enumerate(items):
+            key = new_keys[index]
+            if index in repaint or old_by_key.get(key) != item:
+                self._paint_item(index)
+            if key in selected:
+                tk.Listbox.selection_set(self, index)
+            if key == focused:
+                self._selected_index = index
+                tk.Listbox.activate(self, index)
+            if key == anchor_key:
+                self.selection_anchor(index)
+        if top_key in new_keys:
+            self.yview(new_keys.index(top_key))
+        self._draw_locks()
 
     def selection(self) -> tuple[str, ...]:
         selection = self.curselection()
@@ -76,6 +153,13 @@ class LibraryListbox(tk.Listbox):
         super().selection_set(index)
         super().activate(index)
         self.see(index)
+        self._draw_locks()
+
+    def selection_clear(self, first, last=None) -> None:
+        super().selection_clear(first, last)
+        self._sync_selected_index()
+
+    select_clear = selection_clear
 
     def focus(self, item_id=None):
         if item_id is None:
@@ -102,7 +186,10 @@ class LibraryListbox(tk.Listbox):
         return str(row) if 0 <= row < len(self._items) else ""
 
     def tag_configure(self, tag: str, **kwargs) -> None:
-        self._tag_styles[tag] = {key: value for key, value in kwargs.items() if isinstance(value, str)}
+        options = {key: value for key, value in kwargs.items() if isinstance(value, str)}
+        if self._tag_styles.get(tag) == options:
+            return
+        self._tag_styles[tag] = options
         for index, item in enumerate(self._items):
             if tag in item.get("tags", ()):
                 self._paint_item(index)
@@ -110,6 +197,7 @@ class LibraryListbox(tk.Listbox):
             options = self._tag_styles.get(tag, {})
             if "foreground" in options:
                 self.itemconfig(0, foreground=options["foreground"])
+        self._draw_locks()
 
     def bind(self, sequence=None, func=None, add=None):
         if sequence == "<<TreeviewSelect>>":
@@ -138,6 +226,52 @@ class LibraryListbox(tk.Listbox):
     def _sync_selected_index(self, _event=None) -> None:
         selection = self.curselection()
         self._selected_index = int(selection[0]) if selection and not self._placeholder_visible else None
+        self._draw_locks()
+
+    def configure(self, cnf=None, **kwargs):
+        if "yscrollcommand" in kwargs:
+            self._scroll_callback = kwargs.pop("yscrollcommand")
+            kwargs["yscrollcommand"] = self._on_scroll
+        result = super().configure(cnf, **kwargs)
+        if hasattr(self, "lock_gutter"):
+            self._draw_locks()
+        return result
+
+    config = configure
+
+    def _on_scroll(self, first, last) -> None:
+        callback = self._scroll_callback
+        if callable(callback):
+            callback(first, last)
+        elif callback:
+            self.tk.call(callback, first, last)
+        self._draw_locks()
+
+    def _draw_locks(self) -> None:
+        """Paint only visible rows in a fixed right-hand gutter."""
+        gutter = self.lock_gutter
+        gutter.delete("all")
+        gutter.configure(background=self.cget("background"))
+        if not self._items or self._placeholder_visible:
+            return
+        selected = set(self.curselection())
+        for index in range(self.nearest(0), min(len(self._items), self.nearest(self.winfo_height()) + 1)):
+            bbox = self.bbox(index)
+            if not bbox:
+                continue
+            _, y, _, height = bbox
+            prefix = "select" if index in selected else ""
+            background = self.itemcget(index, prefix + "background") or self.cget(prefix + "background")
+            foreground = self.itemcget(index, prefix + "foreground") or self.cget(prefix + "foreground")
+            gutter.create_rectangle(0, y, 26, y + height, fill=background, outline="")
+            if "track_locked" in self._items[index].get("tags", ()):
+                gutter.create_text(
+                    13, y + height / 2, text="\N{LOCK}", fill=foreground, font=self.cget("font"), tags="lock"
+                )
+
+    def _destroy_gutter(self, event) -> None:
+        if event.widget is self:
+            self.lock_gutter.destroy()
 
 
 class ToolTip:

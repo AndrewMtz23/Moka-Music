@@ -91,7 +91,7 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         self.menu_controller: Optional[MenuController] = None
         self.selection_controller = SelectionController(self._filename_from_tree_item)
         self.song_actions = SongActions(translator=self.t)
-        self.controller_principal = MetadataController(translator=self.t)
+        self.controller_principal = MetadataController(translator=self.t, close_gaps_on_move=True)
         self.controller_nueva = MetadataController(translator=self.t)
 
         self.current_theme = "light"
@@ -332,6 +332,7 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
             on_sort=self._sort_files,
             on_refresh=self._schedule_library_refresh,
             on_action=(self._add_single_file if is_main else lambda _controller, _tree: self._move_to_main()),
+            on_move_to_incoming=self._move_to_incoming if is_main else None,
             on_clear_folder=self._clear_library_folder,
             on_refresh_folder=self._refresh_library_folder,
             on_delete_selected=self._delete_selected_from_library,
@@ -356,6 +357,7 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         if is_main:
             self.tree_principal = bundle.tree
             self._ui_text_widgets["add_song_button"] = bundle.action_button
+            self._ui_text_widgets["move_to_incoming_button"] = bundle.transfer_button
         else:
             self.tree_nueva = bundle.tree
             self._ui_text_widgets["move_to_main_button"] = bundle.action_button

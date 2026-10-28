@@ -32,6 +32,7 @@ class LibraryPanelBundle:
     empty_state_button: ttk.Button
     extra_button: ttk.Button | None = None
     second_extra_button: ttk.Button | None = None
+    transfer_button: ttk.Button | None = None
 
     def panel_state(self, controller: MetadataController) -> dict[str, object]:
         return {
@@ -77,6 +78,7 @@ def build_library_panel(
     on_extra_action: Callable[[], None] | None = None,
     second_extra_action_text: str = "",
     on_second_extra_action: Callable[[], None] | None = None,
+    on_move_to_incoming: Callable[[], None] | None = None,
 ) -> LibraryPanelBundle:
     frame = ttk.LabelFrame(parent, text=title)
     try:
@@ -197,6 +199,7 @@ def build_library_panel(
         height=13,
     )
     tree.grid(row=0, column=0, sticky="nsew")
+    tree.lock_gutter.grid(row=0, column=1, sticky="ns")
     tree.heading("#0", text=t("tree.song_name"))
     tree.heading("num", text="#")
     tree.heading("path", text=t("tree.file_path"))
@@ -207,7 +210,7 @@ def build_library_panel(
     scrollbar = ttk.Scrollbar(scrollbar_frame, orient="vertical", command=tree.yview)
     horizontal_scrollbar = ttk.Scrollbar(scrollbar_frame, orient="horizontal", command=tree.xview)
     tree.configure(yscrollcommand=scrollbar.set, xscrollcommand=horizontal_scrollbar.set)
-    scrollbar.grid(row=0, column=1, sticky="ns")
+    scrollbar.grid(row=0, column=2, sticky="ns")
     horizontal_scrollbar.grid(row=1, column=0, sticky="ew")
 
     empty_state_frame = tk.Frame(scrollbar_frame, background=colors["surface"], borderwidth=0)
@@ -260,13 +263,27 @@ def build_library_panel(
     search_var.trace_add("write", lambda *_args: on_refresh(controller, tree))
     filter_menu.bind("<<ComboboxSelected>>", lambda _event: on_refresh(controller, tree))
 
+    action_bar = ttk.Frame(frame)
+    action_bar.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+    action_bar.columnconfigure(0, weight=1, uniform="library_actions")
     action_button = ttk.Button(
-        frame,
+        action_bar,
         text=t("button.add_song" if is_main else "button.move_to_main"),
         command=lambda: on_action(controller, tree),
         style="Secondary.TButton" if is_main else "Accent.TButton",
     )
-    action_button.grid(row=3, column=0, sticky="ew", pady=(10, 0), ipady=2)
+    action_button.grid(row=0, column=0, sticky="ew", ipady=4)
+    transfer_button = None
+    if is_main and on_move_to_incoming is not None:
+        action_bar.columnconfigure(1, weight=1, uniform="library_actions")
+        action_button.grid_configure(padx=(0, 5))
+        transfer_button = ttk.Button(
+            action_bar,
+            text=t("button.move_to_incoming"),
+            command=on_move_to_incoming,
+            style="Accent.TButton",
+        )
+        transfer_button.grid(row=0, column=1, sticky="ew", padx=(5, 0), ipady=4)
 
     return LibraryPanelBundle(
         frame=frame,
@@ -290,4 +307,5 @@ def build_library_panel(
         empty_state_button=empty_state_button,
         extra_button=extra_button,
         second_extra_button=second_extra_button,
+        transfer_button=transfer_button,
     )

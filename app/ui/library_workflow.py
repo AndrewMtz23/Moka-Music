@@ -353,7 +353,7 @@ class LibraryWorkflowMixin:
             filename = str(drag.get("filename", "") or "")
             if destination_controller is origin_controller or not filename:
                 return
-            self._move_between_libraries_by_drag(
+            self._transfer_song_between_libraries(
                 origin_controller,
                 origin_tree,
                 destination_controller,
@@ -381,6 +381,7 @@ class LibraryWorkflowMixin:
         filenames.insert(target_index, moved)
         controller.reorder_files(filenames)
 
+        # Automatic numbering reserves explicitly assigned track numbers.
         result = controller.apply_track_numbers_from_order()
         controller.set_sort_mode(SortMode.TRACK_NUMBER)
         self._set_sort_widget_for_controller(controller, SortMode.TRACK_NUMBER)
