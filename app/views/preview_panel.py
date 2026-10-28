@@ -30,6 +30,7 @@ class PreviewPanel(ttk.Frame):
         self.current_song_data: Optional[dict[str, Any]] = None
         self.cover_image: Optional[ImageTk.PhotoImage] = None
         self.default_cover: Optional[ImageTk.PhotoImage] = None
+        self._theme_palette: dict[str, str] = {}
         self.on_save_requested: Optional[Callable[[], None]] = None
         self.on_cover_requested: Optional[Callable[[], None]] = None
         self.on_clear_metadata_requested: Optional[Callable[[], None]] = None
@@ -232,7 +233,13 @@ class PreviewPanel(ttk.Frame):
 
     def _create_default_cover(self) -> None:
         try:
-            image = Image.new("RGB", (COVER_SIZE, COVER_SIZE), color="#eeeeeb")
+            style = ttk.Style()
+            background = self._theme_palette.get("surface_alt") or style.lookup("TFrame", "background") or "#eeeeeb"
+            foreground = self._theme_palette.get("text_secondary") or style.lookup("TLabel", "foreground") or "#666666"
+            # Tk also accepts system color names; convert them for Pillow.
+            rgb = tuple(channel // 257 for channel in self.winfo_rgb(background))
+            text_rgb = tuple(channel // 257 for channel in self.winfo_rgb(foreground))
+            image = Image.new("RGB", (COVER_SIZE, COVER_SIZE), color=rgb)
             draw = ImageDraw.Draw(image)
             try:
                 font = ImageFont.truetype("arial.ttf", 18)
@@ -241,7 +248,7 @@ class PreviewPanel(ttk.Frame):
             draw.multiline_text(
                 (COVER_SIZE // 2, COVER_SIZE // 2),
                 self.t("preview.default_cover"),
-                fill="#666666",
+                fill=text_rgb,
                 font=font,
                 anchor="mm",
                 align="center",
@@ -251,6 +258,18 @@ class PreviewPanel(ttk.Frame):
         except Exception as exc:
             self.logger.error("Error creating default cover: %s", exc)
             self.cover_label.configure(text=self.t("preview.no_cover"), font=("Segoe UI", 10))
+
+    def refresh_theme(self, palette: dict[str, str]) -> None:
+        self._theme_palette = dict(palette)
+        has_artwork = (
+            self.cover_image is not None
+            and self.cover_image is not self.default_cover
+            and bool(self.current_song_data and self.current_song_data.get("cover_art"))
+        )
+        self._create_default_cover()
+        if not has_artwork:
+            self.cover_image = self.default_cover
+        self.cover_label.configure(image=self.cover_image, text="")
 
     def set_translator(self, translator: Callable[..., str]) -> None:
         self.t = translator
@@ -352,6 +371,7 @@ class PreviewPanel(ttk.Frame):
             self.cover_label.configure(image=self.cover_image, text="")
         except Exception as exc:
             self.logger.error("Error updating cover preview: %s", exc)
+            self.cover_image = self.default_cover
             self.cover_label.configure(image=self.default_cover, text="")
 
     def _format_duration(self, duration_seconds: float) -> str:

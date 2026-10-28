@@ -457,6 +457,7 @@ class AppLifecycleMixin:
             density=self.current_density,
             accent_color=self.current_accent_color,
             custom_themes=self.custom_themes,
+            preview_context=self._theme_preview_context(),
         )
         if not appearance:
             return
@@ -467,6 +468,52 @@ class AppLifecycleMixin:
         )
         self._change_theme(str(appearance["theme"]))
         self._save_config()
+
+    def _theme_preview_context(self) -> dict:
+        """Snapshot loaded data only; opening settings never scans the library."""
+        preview = getattr(self, "preview", None)
+        song = dict(preview.current_song_data or {}) if preview else {}
+        filename = getattr(self, "_preview_filename", "")
+        controller = getattr(self, "_preview_controller", None)
+        tree = next((panel["tree"] for panel in self._library_panels if panel.get("controller") is controller), None)
+        player = getattr(self, "player", None)
+        track = player.details.track if player else None
+        if track and player.playback.current_file:
+            song = {**track.metadata, "cover_art": track.cover_art, "duration": track.duration}
+            filename = track.filename
+            tree = self._playback_tree
+        rows = []
+        if tree is not None:
+            for item_id in tree.get_children():
+                item = tree.item(item_id)
+                tags = item.get("tags", ())
+                if not tags or tags[0] == "placeholder":
+                    continue
+                values = item.get("values", ())
+                number = values[0] if values else ""
+                rows.append(
+                    {
+                        "text": f"{number}. {item.get('text', '')}",
+                        "selected": tags[0] == filename,
+                        "issue": "error"
+                        if any(tag in tags for tag in ("issue_duplicate", "issue_possibly_corrupt"))
+                        else "warning"
+                        if any(
+                            tag in tags
+                            for tag in (
+                                "issue_missing_artist",
+                                "issue_missing_album",
+                                "issue_missing_year",
+                                "issue_missing_track",
+                                "issue_low_bitrate",
+                            )
+                        )
+                        else "",
+                    }
+                )
+        selected = next((index for index, row in enumerate(rows) if row["selected"]), 0)
+        start = min(max(0, selected - 1), max(0, len(rows) - 5))
+        return {"song": song, "rows": rows[start : start + 5], "total": len(rows)}
 
     def _save_current_theme_as(self) -> None:
         name = simpledialog.askstring(
@@ -631,13 +678,7 @@ class AppLifecycleMixin:
         self.current_theme = theme
         try:
             self.style_manager.set_theme(theme)
-            for panel in self._library_panels:
-                self._apply_tree_colors(panel["tree"])
-            if self.menu_controller is not None:
-                self.menu_controller.set_theme_colors(self.style_manager.get_theme_colors())
-                self.menu_controller.install()
-            if hasattr(self, "player"):
-                self.player.refresh_theme()
+            self._refresh_theme_widgets()
         except Exception as exc:
             self.logger.error("Error changing theme to %s: %s", theme, exc)
 
@@ -652,20 +693,25 @@ class AppLifecycleMixin:
                 density=density,
                 accent_color=self.current_accent_color,
             )
-            for panel in self._library_panels:
-                tree = panel["tree"]
-                try:
-                    tree.configure(font=self.style_manager.base_font)
-                except Exception:
-                    pass
-                self._apply_tree_colors(tree)
-            if self.menu_controller is not None:
-                self.menu_controller.set_theme_colors(self.style_manager.get_theme_colors())
-                self.menu_controller.install()
-            if hasattr(self, "player"):
-                self.player.refresh_theme()
+            self._refresh_theme_widgets()
         except Exception as exc:
             self.logger.error("Error changing appearance options: %s", exc)
+
+    def _refresh_theme_widgets(self) -> None:
+        """Refresh native widgets as well as ttk styles after palette changes."""
+        colors = self.style_manager.get_theme_colors()
+        for panel in self._library_panels:
+            panel["tree"].configure(font=self.style_manager.base_font)
+            self._apply_tree_colors(panel["tree"])
+            self._library_ui_controller().apply_empty_state_colors(panel)
+            self._refresh_search_placeholder(panel)
+        if self.menu_controller is not None:
+            self.menu_controller.set_theme_colors(colors)
+            self.menu_controller.install()
+        if hasattr(self, "player"):
+            self.player.refresh_theme()
+        if hasattr(self, "preview"):
+            self.preview.refresh_theme(colors)
 
     def _change_language(self, language: str) -> None:
         self.current_language = normalize_language(language)
@@ -716,7 +762,6 @@ class AppLifecycleMixin:
         panel = self._get_library_panel_for_search(variable)
         if panel is None:
             return
-        colors = self.style_manager.get_theme_colors()
         placeholder = self.t("search.placeholder")
 
         def show_placeholder() -> None:
@@ -724,13 +769,13 @@ class AppLifecycleMixin:
                 return
             panel["search_placeholder_active"] = True
             variable.set(placeholder)
-            entry.configure(foreground=colors["text_secondary"])
+            entry.configure(foreground=self.style_manager.get_theme_colors()["text_secondary"])
 
         def hide_placeholder() -> None:
             if panel.get("search_placeholder_active"):
                 panel["search_placeholder_active"] = False
                 variable.set("")
-                entry.configure(foreground=colors["text"])
+                entry.configure(foreground=self.style_manager.get_theme_colors()["text"])
 
         entry.bind("<FocusIn>", lambda _event: hide_placeholder(), add="+")
         entry.bind("<FocusOut>", lambda _event: show_placeholder(), add="+")

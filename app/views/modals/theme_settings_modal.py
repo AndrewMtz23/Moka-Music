@@ -5,6 +5,7 @@ from tkinter import colorchooser, ttk
 from typing import Callable
 
 from ...ui.theme import THEME_PRESETS, is_valid_hex_color, palette_with_accent
+from .theme_song_preview import ThemeSongPreview
 
 THEME_CHOICES = (
     ("light", "theme_settings.light"),
@@ -39,6 +40,7 @@ def request_theme_selection(
     density: str = "normal",
     accent_color: str = "",
     custom_themes: list[dict[str, object]] | None = None,
+    preview_context: dict | None = None,
 ) -> dict[str, object] | None:
     modal = tk.Toplevel(parent)
     modal.title(translator("theme_settings.title"))
@@ -63,7 +65,7 @@ def request_theme_selection(
     container = ttk.Frame(modal, padding=18)
     container.pack(fill="both", expand=True)
     container.columnconfigure(0, weight=0, minsize=280)
-    container.columnconfigure(1, weight=1, minsize=600)
+    container.columnconfigure(1, weight=1)
     container.rowconfigure(1, weight=1)
 
     ttk.Label(
@@ -79,7 +81,7 @@ def request_theme_selection(
 
     preview_panel = ttk.LabelFrame(container, text=translator("theme_settings.preview"), padding=10)
     preview_panel.grid(row=1, column=1, sticky="nsew")
-    preview_panel.columnconfigure(0, weight=1, minsize=560)
+    preview_panel.columnconfigure(0, weight=1)
     preview_panel.rowconfigure(0, weight=1)
 
     theme_list = tk.Listbox(
@@ -130,11 +132,31 @@ def request_theme_selection(
     accent_buttons.columnconfigure(0, weight=1)
     accent_buttons.columnconfigure(1, weight=1)
 
-    preview = tk.Frame(preview_panel, borderwidth=1, relief="solid")
-    preview.grid(row=0, column=0, sticky="nsew")
+    preview_canvas = tk.Canvas(preview_panel, width=1, height=1, highlightthickness=0)
+    preview_canvas.grid(row=0, column=0, sticky="nsew")
+    preview_scroll = ttk.Scrollbar(preview_panel, orient="vertical", command=preview_canvas.yview)
+    preview_scroll.grid(row=0, column=1, sticky="ns")
+    preview_canvas.configure(yscrollcommand=preview_scroll.set)
+    preview = tk.Frame(preview_canvas, borderwidth=1, relief="solid")
+    preview_window = preview_canvas.create_window(0, 0, anchor="nw", window=preview)
+    preview_canvas.bind(
+        "<Configure>", lambda event: preview_canvas.itemconfigure(preview_window, width=max(1, event.width))
+    )
+    preview.bind("<Configure>", lambda _event: preview_canvas.configure(scrollregion=preview_canvas.bbox("all")))
     preview.columnconfigure(0, weight=1)
 
-    preview_widgets = build_preview_widgets(preview, translator)
+    preview_widgets = build_preview_widgets(preview, translator, preview_context)
+
+    def scroll_preview(event):
+        if preview.winfo_reqheight() > preview_canvas.winfo_height():
+            preview_canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
+        return "break"
+
+    pending = [preview_canvas]
+    while pending:
+        widget = pending.pop()
+        widget.bind("<MouseWheel>", scroll_preview, add="+")
+        pending.extend(widget.winfo_children())
     preview_widgets["theme_list"] = theme_list
 
     def selected_theme_id() -> str:
@@ -156,6 +178,10 @@ def request_theme_selection(
             highlightcolor=palette["primary"],
         )
         apply_preview_palette(preview_widgets, palette)
+        preview_canvas.configure(background=palette["surface"])
+        preview_widgets["song_preview"].apply_appearance(
+            palette, selected_font_scale(font_scale_var.get()), selected_density(translator, density_var.get())
+        )
         apply_preview_layout(
             preview_widgets, selected_font_scale(font_scale_var.get()), selected_density(translator, density_var.get())
         )
@@ -318,7 +344,9 @@ def selected_density(translator: Callable[..., str], label: str) -> str:
     return mapping.get(label, "normal")
 
 
-def build_preview_widgets(parent: tk.Frame, translator: Callable[..., str]) -> dict[str, tk.Widget]:
+def build_preview_widgets(
+    parent: tk.Frame, translator: Callable[..., str], preview_context: dict | None = None
+) -> dict[str, tk.Widget]:
     widgets: dict[str, tk.Widget] = {"preview": parent}
     parent.rowconfigure(2, weight=1)
 
@@ -330,7 +358,7 @@ def build_preview_widgets(parent: tk.Frame, translator: Callable[..., str]) -> d
     widgets["primary_button"].grid(row=0, column=0, sticky="w", padx=(0, 8))
     widgets["secondary_button"] = tk.Label(header, text="↻", padx=12, pady=8)
     widgets["secondary_button"].grid(row=0, column=1, sticky="w")
-    widgets["sort_field"] = tk.Label(header, text=translator("sort.by_bitrate"), anchor="w", padx=10, pady=8)
+    widgets["sort_field"] = tk.Label(header, text=translator("sort.by_track_number"), anchor="w", padx=10, pady=8)
     widgets["sort_field"].grid(row=0, column=2, sticky="e", padx=(8, 0))
 
     controls = tk.Frame(parent, borderwidth=0)
@@ -339,11 +367,13 @@ def build_preview_widgets(parent: tk.Frame, translator: Callable[..., str]) -> d
     widgets["controls"] = controls
     widgets["search_label"] = tk.Label(controls, text=translator("search.label"), padx=0, pady=6)
     widgets["search_label"].grid(row=0, column=0, sticky="w", padx=(0, 6))
-    widgets["search_field"] = tk.Label(controls, text=translator("search.placeholder"), anchor="w", padx=10, pady=8)
+    widgets["search_field"] = tk.Label(
+        controls, text=translator("search.placeholder"), width=1, anchor="w", padx=10, pady=8
+    )
     widgets["search_field"].grid(row=0, column=1, sticky="ew", padx=(0, 10))
     widgets["filter_label"] = tk.Label(controls, text=translator("filter.label"), padx=0, pady=6)
     widgets["filter_label"].grid(row=0, column=2, sticky="w", padx=(0, 6))
-    widgets["filter_field"] = tk.Label(controls, text=translator("filter.bitrate_128"), anchor="w", padx=10, pady=8)
+    widgets["filter_field"] = tk.Label(controls, text=translator("filter.all"), anchor="w", padx=10, pady=8)
     widgets["filter_field"].grid(row=0, column=3, sticky="e")
 
     sample_list = tk.Frame(parent, borderwidth=0)
@@ -358,15 +388,45 @@ def build_preview_widgets(parent: tk.Frame, translator: Callable[..., str]) -> d
         ("error_row", "4. MOKA - Archivo danado [ERR]"),
     ]
     for index, (key, text) in enumerate(rows):
-        widgets[key] = tk.Label(sample_list, text=text, anchor="w", padx=8, pady=6)
+        real_rows = preview_context.get("rows", []) if preview_context is not None else None
+        if real_rows is not None:
+            text = real_rows[index]["text"] if index < len(real_rows) else ""
+        widgets[key] = tk.Label(sample_list, text=text, anchor="w", width=1, padx=8, pady=6)
         widgets[key].grid(row=index, column=0, sticky="ew")
+        if real_rows is not None:
+            if index >= len(real_rows):
+                widgets[key].grid_remove()
+            else:
+                row = real_rows[index]
+                widgets[key].preview_role = (
+                    "selected_row"
+                    if row["selected"]
+                    else "warning_row"
+                    if row["issue"] == "warning"
+                    else "error_row"
+                    if row["issue"] == "error"
+                    else "alternate_row"
+                    if index % 2
+                    else "normal_row"
+                )
+
+    widgets["song_preview"] = ThemeSongPreview(parent, translator, (preview_context or {}).get("song"))
+    widgets["song_preview"].grid(row=3, column=0, sticky="ew", padx=12, pady=(8, 10))
 
     footer = tk.Frame(parent, borderwidth=0)
-    footer.grid(row=3, column=0, sticky="ew", padx=12, pady=(0, 12))
+    footer.grid(row=4, column=0, sticky="ew", padx=12, pady=(0, 12))
     footer.columnconfigure(0, weight=1)
     widgets["footer"] = footer
     widgets["status"] = tk.Label(
-        footer, text=translator("filter.results", shown=114, total=794), anchor="w", padx=10, pady=8
+        footer,
+        text=translator(
+            "filter.results",
+            shown=len(preview_context.get("rows", [])) if preview_context is not None else 5,
+            total=preview_context.get("total", 0) if preview_context is not None else 5,
+        ),
+        anchor="w",
+        padx=10,
+        pady=8,
     )
     widgets["status"].grid(row=0, column=0, sticky="ew")
     widgets["success_chip"] = tk.Label(footer, text=translator("toast.done"), padx=10, pady=8)
@@ -384,13 +444,18 @@ def apply_preview_palette(widgets: dict[str, tk.Widget], palette: dict[str, str]
     widgets["secondary_button"].configure(background=palette["secondary"], foreground=palette["text"])
     for key in ("search_field", "filter_field", "sort_field"):
         widgets[key].configure(background=palette["field"], foreground=palette["text_secondary"])
-    widgets["selected_row"].configure(background=palette["highlight"], foreground=palette["highlight_text"])
-    widgets["alternate_row"].configure(background=palette["surface_alt"], foreground=palette["text"])
-    widgets["normal_row"].configure(background=palette["surface"], foreground=palette["text"])
-    widgets["warning_row"].configure(background=palette["surface_alt"], foreground=palette["warning"])
-    widgets["error_row"].configure(background=palette["surface"], foreground=palette["error"])
     widgets["status"].configure(background=palette["surface_alt"], foreground=palette["text_secondary"])
     widgets["success_chip"].configure(background=palette["success"], foreground=palette["highlight_text"])
+    roles = {
+        "selected_row": (palette["highlight"], palette["highlight_text"]),
+        "alternate_row": (palette["surface_alt"], palette["text"]),
+        "normal_row": (palette["surface"], palette["text"]),
+        "warning_row": (palette["surface_alt"], palette["warning"]),
+        "error_row": (palette["surface"], palette["error"]),
+    }
+    for key in roles:
+        background, foreground = roles[getattr(widgets[key], "preview_role", key)]
+        widgets[key].configure(background=background, foreground=foreground)
 
 
 def apply_preview_layout(widgets: dict[str, tk.Widget], font_scale: float, density: str) -> None:

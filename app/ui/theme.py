@@ -246,6 +246,34 @@ class StyleManager:
 
         self.style.configure("TFrame", background=self._get_color("surface"))
         self.style.configure("Panel.TFrame", background=self._get_color("surface"))
+        self.style.configure("TPanedwindow", background=self._get_color("background"))
+        for separator in ("Horizontal.TSeparator", "Vertical.TSeparator"):
+            self.style.configure(separator, background=self._get_color("border_soft"))
+        self.style.configure(
+            "TNotebook", background=self._get_color("background"), bordercolor=self._get_color("border")
+        )
+        self.style.configure(
+            "TNotebook.Tab", background=self._get_color("surface_alt"), foreground=self._get_color("text")
+        )
+        self.style.map(
+            "TNotebook.Tab",
+            background=[("selected", self._get_color("surface")), ("active", self._get_color("secondary_hover"))],
+            foreground=[("selected", self._get_color("text")), ("active", self._get_color("text"))],
+        )
+        self.style.configure(
+            "TSpinbox",
+            fieldbackground=self._get_color("field"),
+            background=self._get_color("field"),
+            foreground=self._get_color("text"),
+            arrowcolor=self._get_color("text_secondary"),
+            bordercolor=self._get_color("border"),
+            insertcolor=self._get_color("text"),
+        )
+        self.style.map(
+            "TSpinbox",
+            fieldbackground=[("readonly", self._get_color("field"))],
+            foreground=[("disabled", self._get_color("disabled"))],
+        )
 
         self.style.configure(
             "TLabel",
@@ -463,6 +491,12 @@ class StyleManager:
             darkcolor=self._get_color("primary"),
             thickness=int(8 * self.scaling_factor),
         )
+        for scrollbar in ("Vertical.TScrollbar", "Horizontal.TScrollbar"):
+            self.style.map(
+                scrollbar,
+                background=[("pressed", self._get_color("primary")), ("active", self._get_color("secondary_hover"))],
+                arrowcolor=[("disabled", self._get_color("disabled")), ("active", self._get_color("text"))],
+            )
 
         self.style.configure(
             "Horizontal.TScale",
@@ -542,6 +576,25 @@ class StyleManager:
         self.root.option_add("*Menu.disabledForeground", self._get_color("disabled"))
         self.root.option_add("*Menu.selectColor", self._get_color("primary"))
         self._create_common_styles()
+
+        popup_colors = {
+            "background": self._get_color("field"),
+            "foreground": self._get_color("text"),
+            "selectBackground": self._get_color("highlight"),
+            "selectForeground": self._get_color("highlight_text"),
+        }
+        for option, value in popup_colors.items():
+            self.root.option_add(f"*TCombobox*Listbox.{option}", value)
+        # Popdowns are native Tcl widgets: option_add only affects future ones.
+        pending = [str(self.root)]
+        while pending:
+            path = pending.pop()
+            if self.root.tk.call("winfo", "class", path) == "TCombobox":
+                listbox = f"{path}.popdown.f.l"
+                if self.root.tk.call("winfo", "exists", listbox):
+                    options = [part for key, value in popup_colors.items() for part in (f"-{key.lower()}", value)]
+                    self.root.tk.call(listbox, "configure", *options)
+            pending.extend(self.root.tk.splitlist(self.root.tk.call("winfo", "children", path)))
 
     def adjust_for_dpi(self) -> None:
         self._setup_base_theme()

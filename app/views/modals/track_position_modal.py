@@ -165,24 +165,14 @@ def request_track_position(
 
 
 def _theme_colors(parent) -> dict[str, str]:
-    defaults = {
-        "surface": "#fbf3f6",
-        "text": "#151015",
-        "primary": "#c40f43",
-        "primary_text": "#ffffff",
-    }
-    try:
-        app = parent
-        while app is not None and not hasattr(app, "style_manager"):
-            app = app.master
-        colors = app.style_manager.get_theme_colors() if app is not None else {}
-    except Exception:
-        colors = {}
+    # Callers pass a Tk widget, not MokaMusicApp. Read the same active styles
+    # as the ttk controls instead of falling back to an unrelated pink palette.
+    style = ttk.Style(parent)
     return {
-        "surface": str(colors.get("surface", defaults["surface"])),
-        "text": str(colors.get("text", defaults["text"])),
-        "primary": str(colors.get("primary", colors.get("highlight", defaults["primary"]))),
-        "primary_text": str(colors.get("primary_text", colors.get("highlight_text", defaults["primary_text"]))),
+        "surface": str(style.lookup("TFrame", "background")),
+        "text": str(style.lookup("TLabel", "foreground")),
+        "primary": str(style.lookup("TButton", "background")),
+        "primary_text": str(style.lookup("TButton", "foreground", ("!disabled",))),
     }
 
 
