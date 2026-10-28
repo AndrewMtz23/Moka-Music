@@ -283,6 +283,7 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
             translator=self.t,
             theme_colors=self.style_manager.get_theme_colors,
         )
+        self.player.on_context_changed = self._refresh_player_details
         self.player.on_track_end = self._play_next_track
         self.player.on_next_requested = lambda: self._play_relative_track(1)
         self.player.on_prev_requested = lambda: self._play_relative_track(-1)

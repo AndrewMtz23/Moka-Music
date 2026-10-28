@@ -470,6 +470,7 @@ class LibraryWorkflowMixin:
             panel=panel,
             filter_mode_from_text=self._filter_mode_from_text,
         )
+        self._refresh_player_details()
         if not panel:
             self.logger.info(
                 "[%s] Refresh without panel: controller=%s rows=%s",

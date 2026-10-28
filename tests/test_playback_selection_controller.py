@@ -29,6 +29,30 @@ def filename_from_item(item):
 
 
 class PlaybackSelectionControllerTests(unittest.TestCase):
+    def test_queue_prepares_five_tracks_and_keeps_shuffle_order_when_advancing(self):
+        tree = FakeTree({str(i): {"tags": (f"{i}.mp3",)} for i in range(8)}, selected=["0"])
+        controller = PlaybackSelectionController(filename_from_item, chooser=lambda candidates: candidates[-1])
+        self.assertEqual(
+            controller.upcoming_items(tree, current_filename="0.mp3", shuffle=False), ["1", "2", "3", "4", "5"]
+        )
+        planned = controller.upcoming_items(tree, current_filename="0.mp3", shuffle=True)
+        self.assertEqual(planned, ["7", "6", "5", "4", "3"])
+        self.assertEqual(controller.upcoming_items(tree, current_filename="7.mp3", shuffle=True)[:4], planned[1:])
+
+    def test_upcoming_tracks_follow_playing_file_not_editing_selection(self):
+        tree = FakeTree({str(i): {"tags": (f"{i}.mp3",)} for i in range(4)}, selected=["3"])
+        controller = PlaybackSelectionController(filename_from_item)
+        self.assertEqual(controller.upcoming_items(tree, current_filename="0.mp3", shuffle=False), ["1", "2", "3"])
+        self.assertEqual(controller.upcoming_items(tree, current_filename="3.mp3", shuffle=False), [])
+        self.assertEqual(controller.upcoming_items(tree, current_filename="missing.mp3", shuffle=False), [])
+
+    def test_shuffle_preview_is_stable_and_does_not_repeat_current_track(self):
+        tree = FakeTree({str(i): {"tags": (f"{i}.mp3",)} for i in range(4)}, selected=["0"])
+        controller = PlaybackSelectionController(filename_from_item, chooser=lambda candidates: candidates[-1])
+        self.assertEqual(controller.upcoming_items(tree, current_filename="0.mp3", shuffle=True), ["3", "2", "1"])
+        self.assertEqual(controller.upcoming_items(tree, current_filename="0.mp3", shuffle=True), ["3", "2", "1"])
+        self.assertEqual(controller.upcoming_items(tree, current_filename="3.mp3", shuffle=True)[0], "2")
+
     def test_selected_track_returns_filename_and_filepath(self):
         tree = FakeTree({"0": {"tags": ("song.mp3",)}}, selected=["0"])
 

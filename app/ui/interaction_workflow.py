@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from pathlib import Path
 from tkinter import messagebox
 
@@ -25,6 +26,7 @@ class InteractionWorkflowMixin:
             self._playback_tree = tree
             self.player.play()
             self._record_playback(controller, selected.filename, selected.filepath)
+            self._refresh_player_details()
             self.logger.info("Playing %s", selected.filename)
 
     def _record_playback(self, controller: MetadataController, filename: str, filepath: str) -> None:
@@ -43,11 +45,20 @@ class InteractionWorkflowMixin:
         controller = self._playback_controller
         if tree is None or controller is None:
             return
-        target_item = self._playback_selection_controller().relative_item(
-            tree,
-            offset=offset,
-            shuffle=self.player.shuffle_enabled(),
-        )
+        navigation = self._playback_selection_controller()
+        filename = os.path.basename(self.player.playback.current_file or "")
+        if offset == 1:
+            upcoming = navigation.upcoming_items(tree, current_filename=filename, shuffle=self.player.shuffle_enabled())
+            target_item = upcoming[0] if upcoming else None
+        else:
+            children = list(tree.get_children())
+            current = next(
+                (i for i, item in enumerate(children) if self._filename_from_tree_item(tree.item(item)) == filename),
+                None,
+            )
+            target_item = (
+                children[current + offset] if current is not None and 0 <= current + offset < len(children) else None
+            )
         if target_item is None:
             return
         self._select_and_play(controller, tree, target_item)
@@ -57,6 +68,50 @@ class InteractionWorkflowMixin:
             self.player.restart_current_track()
             return
         self._play_relative_track(1)
+
+    def _refresh_player_details(self) -> None:
+        player = getattr(self, "player", None)
+        if player is None:
+            return
+        controller = getattr(self, "_playback_controller", None)
+        tree = getattr(self, "_playback_tree", None)
+        filename = os.path.basename(player.playback.current_file or "")
+        track = controller.get_track_info(filename) if controller and filename else None
+        upcoming = []
+        if track and tree is not None:
+            if player.repeat_enabled():
+                upcoming = [track]
+            else:
+                for item in self._playback_selection_controller().upcoming_items(
+                    tree, current_filename=filename, shuffle=player.shuffle_enabled()
+                ):
+                    name = self._filename_from_tree_item(tree.item(item))
+                    info = controller.get_track_info(name)
+                    if info:
+                        upcoming.append(info)
+        # Read artwork only for the current track and the five upcoming queue rows.
+        # TrackInfo objects are replaced by the library scanner after metadata edits.
+        previous = getattr(self, "_player_detail_covers", {})
+        covers = {}
+
+        def with_cover(info):
+            cached = previous.get(info.filepath)
+            if cached and cached[0] is info:
+                cover = cached[1]
+            else:
+                try:
+                    cover = (
+                        controller.metadata_editor.obtener_portada(info.filepath)
+                        if controller._has_cover_art(info.filename)
+                        else None
+                    )
+                except Exception:
+                    cover = None
+            covers[info.filepath] = (info, cover)
+            return replace(info, cover_art=cover)
+
+        player.update_details(with_cover(track) if track else None, [with_cover(info) for info in upcoming])
+        self._player_detail_covers = covers
 
     def _select_and_play(self, controller: MetadataController, tree, item_id) -> None:
         tree.selection_set(item_id)
