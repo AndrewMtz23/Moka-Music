@@ -1,0 +1,33 @@
+{
+  "name": "MokaMusic development",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": ".."
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/desktop-lite:1": {
+      "password": "vscode",
+      "webPort": "6080"
+    }
+  },
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "SDL_AUDIODRIVER": "dummy"
+  },
+  "forwardPorts": [6080],
+  "portsAttributes": {
+    "6080": {
+      "label": "MokaMusic desktop",
+      "onAutoForward": "notify"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python", "charliermarsh.ruff"],
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/venv/bin/python",
+        "remote.localPortHost": "localhost"
+      }
+    }
+  }
+}

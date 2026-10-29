@@ -182,6 +182,17 @@ From the `Tools` menu you can use:
 - `Backup history`: view date, action, folder, and number of affected songs.
 - `Undo last metadata change`: restore the most recent backup from the current session.
 
+## Development with Docker
+
+Open this repository in VS Code and choose **Dev Containers: Reopen in Container**
+to get Python, dependencies, FFmpeg, and a browser-accessible desktop for UI work.
+For a terminal-only environment, run `docker compose build dev` followed by
+`docker compose run --rm dev`.
+
+See [the contributor guide](CONTRIBUTING.md#docker-development-recommended-for-a-consistent-environment)
+for setup, GUI access, tests, and the published development image. Audio output
+and Windows-specific integration are tested natively on Windows.
+
 ## Tests
 
 Install development tools:

@@ -1,0 +1,69 @@
+name: Development Container
+
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - compose.yaml
+      - .devcontainer/**
+      - requirements*.txt
+      - main.py
+      - assets/**
+      - app/**
+      - tests/**
+      - tools/**
+      - .github/workflows/development-container.yml
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - compose.yaml
+      - .devcontainer/**
+      - requirements*.txt
+      - main.py
+      - assets/**
+      - app/**
+      - tests/**
+      - tools/**
+      - .github/workflows/development-container.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  development-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build development environment
+        run: docker compose build dev
+      - name: Check code and run Linux GUI tests
+        run: |
+          docker compose run --rm -T --user "$(id -u):$(id -g)" -e HOME=/tmp dev bash -c 'ruff check app tests tools && ruff format app tests tools --check && xvfb-run -a python -m unittest discover -s tests -p "test*.py"'
+      - name: Resolve image name
+        id: image
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: echo "name=ghcr.io/${REPOSITORY,,}-dev" >> "$GITHUB_OUTPUT"
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish verified development image
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+        run: |
+          docker tag mokamusic-dev:local "$IMAGE:latest"
+          docker tag mokamusic-dev:local "$IMAGE:sha-$GITHUB_SHA"
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:sha-$GITHUB_SHA"
