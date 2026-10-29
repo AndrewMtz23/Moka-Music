@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from app.controllers.playback_selection_controller import PlaybackSelectionController
 
@@ -63,7 +64,7 @@ class PlaybackSelectionControllerTests(unittest.TestCase):
 
         self.assertEqual(selected.item_id, "0")
         self.assertEqual(selected.filename, "song.mp3")
-        self.assertEqual(selected.filepath, "library\\song.mp3")
+        self.assertEqual(selected.filepath, str(Path("library") / "song.mp3"))
 
     def test_relative_item_moves_with_bounds(self):
         tree = FakeTree(

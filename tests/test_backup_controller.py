@@ -118,7 +118,7 @@ class BackupControllerTests(unittest.TestCase):
         self.assertTrue(result.restored)
         self.assertEqual(result.errors, [])
         self.assertIn((id(metadata_controller), id(tree)), result.refreshed_pairs)
-        self.assertEqual(song_info.invalidated, ["music\\a.mp3"])
+        self.assertEqual(song_info.invalidated, [str(Path("music") / "a.mp3")])
 
 
 if __name__ == "__main__":

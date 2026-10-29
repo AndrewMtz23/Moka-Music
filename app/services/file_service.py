@@ -32,7 +32,7 @@ def list_audio_files(folder: str | Path) -> list[str]:
         path = Path(folder)
         return [
             item.relative_to(path).as_posix()
-            for item in sorted(path.rglob("*"))
+            for item in sorted(path.rglob("*"), key=lambda item: (item.as_posix().casefold(), item.as_posix()))
             if item.is_file() and is_supported_audio_file(item)
         ]
     except Exception as exc:

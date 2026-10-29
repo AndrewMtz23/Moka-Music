@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from app.controllers.cleanup_controller import CleanupController
 from app.controllers.metadata_controller import MetadataController
@@ -117,7 +118,7 @@ class CleanupControllerTests(unittest.TestCase):
         self.assertIn((id(metadata_controller), id(tree)), result.changed_pairs)
         self.assertTrue(result.affected_preview)
         self.assertEqual(result.changed_groups, [(metadata_controller, tree, ["song.mp3"])])
-        self.assertEqual(song_info.invalidated, ["music\\song.mp3"])
+        self.assertEqual(song_info.invalidated, [str(Path("music") / "song.mp3")])
 
 
 if __name__ == "__main__":
