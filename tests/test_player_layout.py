@@ -242,6 +242,40 @@ class PlayerLayoutTests(unittest.TestCase):
             details.status.winfo_rooty() + details.status.winfo_height(),
             details.winfo_rooty() + details.winfo_height(),
         )
+
+    def test_short_player_keeps_one_complete_queue_row_and_all_five_items(self):
+        track = TrackInfo(
+            "song.mp3", "song.mp3", {"title": "Song", "artist": "Artist", "track_number": "129"}, 180, None
+        )
+        self.player.update_details(track, [replace(track, filepath=f"{i}.mp3") for i in range(5)])
+        for width, height in ((420, 260), (620, 280), (420, 620), (420, 260)):
+            with self.subTest(width=width, height=height):
+                self.assert_controls_fit(width, height)
+                details = self.player.details
+                self.assertTrue(details.winfo_ismapped())
+                self.assertEqual(len(details.upcoming), 5)
+                self.assertGreaterEqual(details.viewport.winfo_height(), details.rows[0].frame.winfo_height())
+                self.assertTrue(self.player.vinyl_canvas.winfo_ismapped())
+                details.viewport.yview_moveto(1)
+                self.root.update()
+                last = details.rows[-1].frame
+                self.assertLessEqual(
+                    last.winfo_rooty() + last.winfo_height(),
+                    details.viewport.winfo_rooty() + details.viewport.winfo_height(),
+                )
+                details.viewport.yview_moveto(0)
+
+    def test_queue_survives_larger_fonts_on_short_panel(self):
+        style = ttk.Style(self.root)
+        for name in ("PlayerDetails.TLabel", "PlayerDetailsHeading.TLabel", "PlayerDetailsMuted.TLabel"):
+            style.configure(name, font=("Arial", 18))
+        track = TrackInfo("song.mp3", "song.mp3", {"title": "Song", "track_number": "129"}, 180, None)
+        self.player.update_details(track, [replace(track, filepath=f"{i}.mp3") for i in range(5)])
+        self.assert_controls_fit(430, 300)
+        details = self.player.details
+        self.assertTrue(details.winfo_ismapped())
+        self.assertGreaterEqual(details.viewport.winfo_height(), details.rows[0].frame.winfo_height())
+        self.assertEqual(details.rows[0].number.cget("text"), "#129")
         details.t = I18n("en").t
         details.render()
         self.root.update()

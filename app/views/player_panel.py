@@ -459,14 +459,15 @@ class PlayerControls(ttk.Frame):
         width = max(1, canvas.winfo_width())
         height = max(1, canvas.winfo_height())
         compact = width < 620 or height < 400
-        self._configure_layout(compact)
+        short = height < 340
+        self._configure_layout(compact, short=short)
         card_x = 0 if compact else 112
         card_y = 8
         card_w = max(1, width - card_x - 8)
         card_h = min(self.card_frame.winfo_reqheight(), max(1, height - card_y - 12))
-        details_y = card_y + card_h + 20
+        details_y = card_y + card_h + (12 if short else 20)
         details_height = max(1, height - details_y - 4)
-        show_details = details_height >= 100
+        show_details = self.details.fit_height(details_height)
         if hasattr(self, "details_window"):
             canvas.itemconfigure(
                 self.details_window,
@@ -515,15 +516,17 @@ class PlayerControls(ttk.Frame):
 
     def update_details(self, track, upcoming) -> None:
         self.details.update_context(track, upcoming, repeat=self.repeat_enabled())
+        self.after_idle(self._draw_player_shell)
 
     def _notify_context_changed(self, *_args) -> None:
         if self.on_context_changed:
             self.on_context_changed()
 
-    def _configure_layout(self, compact: bool) -> None:
+    def _configure_layout(self, compact: bool, *, short: bool = False) -> None:
         """Reflow existing controls without touching playback state."""
-        if getattr(self, "_compact_layout", None) == compact:
+        if getattr(self, "_layout_mode", None) == (compact, short):
             return
+        self._layout_mode = (compact, short)
         self._compact_layout = compact
         padding = (16, 16) if compact else (70, 20)
         for row in (self.top_row, self.progress_frame, self.transport_frame):
@@ -532,6 +535,10 @@ class PlayerControls(ttk.Frame):
         self.card_frame.rowconfigure(0, minsize=72 if compact else 0)
         self.progress_frame.grid_configure(pady=(4, 0) if compact else (14, 0))
         self.transport_frame.grid_configure(pady=(6, 10) if compact else (12, 20))
+        if short:
+            self.top_row.grid_configure(pady=0)
+            self.progress_frame.grid_configure(pady=0)
+            self.transport_frame.grid_configure(pady=(2, 4))
         size = 72 if compact else 166
         self.vinyl_canvas.configure(width=size, height=size)
         self.shadow_canvas.itemconfigure(self.vinyl_window, width=size, height=size)

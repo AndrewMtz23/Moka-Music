@@ -76,6 +76,32 @@ class PlayerDetails(ttk.Frame):
     def refresh_theme(self):
         self.viewport.configure(background=ttk.Style().lookup("Player.TFrame", "background"))
 
+    def fit_height(self, height):
+        """Prefer queue rows over secondary metadata when vertical space is scarce."""
+        row = self.rows[0]
+        line_height = max(28, row.title.winfo_reqheight(), row.duration.winfo_reqheight())
+        heading_height = self.heading.winfo_reqheight()
+        full_height = (
+            heading_height + 4 + self.status.winfo_reqheight() + 6 + line_height + row.subtitle.winfo_reqheight() + 7
+        )
+        compact = height < full_height
+        if getattr(self, "_compact", None) != compact:
+            self._compact = compact
+            self.heading.grid_configure(pady=(0, 2 if compact else 4))
+            if compact:
+                self.status.grid_remove()
+            else:
+                self.status.grid()
+            for widgets in self.rows:
+                if compact:
+                    widgets.subtitle.grid_remove()
+                else:
+                    widgets.subtitle.grid()
+                for widget in (widgets.cover, widgets.number, widgets.duration):
+                    widget.grid_configure(rowspan=1 if compact else 2)
+            self.viewport.yview_moveto(0)
+        return height >= heading_height + 2 + line_height + 4
+
     def _resize_viewport(self, event):
         self.viewport.itemconfigure(self.content_window, width=max(1, event.width))
         self._update_scrollregion()
