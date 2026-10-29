@@ -12,7 +12,7 @@
   <a href="https://www.python.org/"><img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white"></a>
   <img alt="Platform Windows" src="https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white">
   <img alt="Tkinter UI" src="https://img.shields.io/badge/ui-Tkinter-2F855A">
-  <img alt="Version 2.2.0" src="https://img.shields.io/badge/version-2.2.0-00A3FF">
+  <img alt="Version 2.3.6" src="https://img.shields.io/badge/version-2.3.6-00A3FF">
 </p>
 
 MokaMusic is a desktop app for playlist preparation and local music library maintenance. Work with two folders side by side, fix metadata in batches, reorder tracks, rename files, export reports, and keep backups before important changes.
@@ -29,7 +29,7 @@ MokaMusic is a desktop app for playlist preparation and local music library main
 
 ## Preview
 
-![MokaMusic desktop preview](assets/mokamusic-preview.png)
+![MokaMusic desktop preview](assets/mokamusic-preview-v2.png)
 
 ## Current Status
 
@@ -242,8 +242,8 @@ After the release workflow is merged into `main`, a successful `Python CI` run o
 You can also create a GitHub Release manually by pushing a version tag:
 
 ```powershell
-git tag v2.2.0
-git push origin v2.2.0
+git tag v2.3.6
+git push origin v2.3.6
 ```
 
 ## Dependencies
