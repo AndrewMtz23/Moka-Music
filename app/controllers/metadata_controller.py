@@ -487,7 +487,7 @@ class MetadataController:
             number = self._track_number_for_file(filename)
             if number is None:
                 continue
-            if self._is_track_number_manual(filename):
+            if self._is_track_number_locked(filename):
                 locked.add(number)
             else:
                 occupied.setdefault(number, []).append(filename)
@@ -542,6 +542,11 @@ class MetadataController:
     def _is_track_number_manual(self, filename: str) -> bool:
         cached = self._metadata_cache.get(filename)
         return bool(cached and (cached.is_manually_set or cached.is_track_locked))
+
+    def _is_track_number_locked(self, filename: str) -> bool:
+        """Only the explicit padlock prevents local insertion/removal shifts."""
+        cached = self._metadata_cache.get(filename)
+        return bool(cached and cached.is_track_locked)
 
     def set_track_number_manual(self, filename: str, manual: bool = True) -> None:
         self.library_cache.set_track_number_manual(os.path.join(self.carpeta, filename), manual)
@@ -654,7 +659,7 @@ class MetadataController:
         # a remaining row. Legacy manual assignments still protect reordering,
         # but must not act as invisible locks during removal.
         tracks = [
-            (filename, number, bool((track := self.get_track_info(filename)) and track.is_track_locked))
+            (filename, number, self._is_track_number_locked(filename))
             for filename in self.archivos
             if (number := self._track_number_for_file(filename)) is not None
         ]
