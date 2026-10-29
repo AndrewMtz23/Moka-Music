@@ -2,6 +2,7 @@ import tkinter as tk
 import unittest
 from dataclasses import replace
 from io import BytesIO
+from tkinter import ttk
 from unittest.mock import Mock, patch
 
 from PIL import Image, ImageTk
@@ -12,6 +13,67 @@ from app.views.player_panel import PlayerControls
 
 
 class PlayerLayoutTests(unittest.TestCase):
+    def volume_widgets(self):
+        self.player._show_volume_modal()
+        self.root.update()
+        modal = next(child for child in self.player.winfo_children() if isinstance(child, tk.Toplevel))
+        self.addCleanup(modal.destroy)
+
+        def descendants(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        widgets = list(descendants(modal))
+        return modal, next(widget for widget in widgets if isinstance(widget, ttk.Scale)), widgets
+
+    def test_volume_clicks_and_drag_follow_pointer(self):
+        _modal, slider, _widgets = self.volume_widgets()
+        start, y = slider.coords(float(slider.cget("from")))
+        end, _ = slider.coords(float(slider.cget("to")))
+        for fraction in (0.25, 0.65, 0.4):
+            slider.event_generate("<ButtonPress-1>", x=round(start + (end - start) * fraction), y=y)
+            slider.event_generate("<ButtonRelease-1>", x=round(start + (end - start) * fraction), y=y)
+            self.root.update()
+            self.assertAlmostEqual(self.player.playback.set_volume.call_args.args[0], fraction, delta=0.015)
+        slider.event_generate("<ButtonPress-1>", x=start, y=y)
+        slider.event_generate("<B1-Motion>", x=round(start + (end - start) * 0.8), y=y)
+        slider.event_generate("<ButtonRelease-1>", x=end, y=y)
+        self.root.update()
+        self.assertAlmostEqual(self.player.playback.set_volume.call_args.args[0], 0.8, delta=0.015)
+
+    def test_volume_modal_fits_near_screen_edges(self):
+        width, height = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+        with (
+            patch.object(self.player, "winfo_rootx", return_value=width - 100),
+            patch.object(self.player, "winfo_rooty", return_value=height - 70),
+        ):
+            modal, _slider, widgets = self.volume_widgets()
+        self.assertLessEqual(modal.winfo_rootx() + modal.winfo_width(), width)
+        self.assertLessEqual(modal.winfo_rooty() + modal.winfo_height(), height)
+        for widget in widgets:
+            self.assertGreaterEqual(widget.winfo_rootx(), modal.winfo_rootx())
+            self.assertLessEqual(widget.winfo_rootx() + widget.winfo_width(), modal.winfo_rootx() + modal.winfo_width())
+
+    def test_volume_buttons_and_keyboard_use_small_steps(self):
+        _modal, slider, widgets = self.volume_widgets()
+        buttons = {widget.cget("text"): widget for widget in widgets if isinstance(widget, ttk.Button)}
+        slider.set(50)
+        buttons["+10%"].invoke()
+        self.assertAlmostEqual(self.player.playback.set_volume.call_args.args[0], 0.6)
+        buttons["−10%"].invoke()
+        self.assertAlmostEqual(self.player.playback.set_volume.call_args.args[0], 0.5)
+        slider.focus_force()
+        slider.event_generate("<Right>")
+        self.root.update()
+        self.assertAlmostEqual(self.player.playback.set_volume.call_args.args[0], 0.51)
+        slider.set(98)
+        buttons["+10%"].invoke()
+        self.assertEqual(self.player.playback.set_volume.call_args.args[0], 1)
+        slider.set(2)
+        buttons["−10%"].invoke()
+        self.assertEqual(self.player.playback.set_volume.call_args.args[0], 0)
+
     def setUp(self):
         try:
             self.root = tk.Tk()
