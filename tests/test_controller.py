@@ -313,11 +313,40 @@ class ControllerTests(unittest.TestCase):
     def test_shift_skips_locked_number(self):
         controller, metadata = self.track_library({"new.mp3": 9, "one.mp3": 1, "locked.mp3": 2, "far.mp3": 8})
         controller.aplicar_cambios_a_archivo("locked.mp3", {"track_number": "2"})
+        controller.change_track_number_lock("locked.mp3", True)
         result = controller.aplicar_cambios_a_archivo("new.mp3", {"track_number": "1"})
         self.assertTrue(result.success)
         self.assertEqual(metadata["locked.mp3"]["track_number"], "2")
         self.assertEqual(metadata["one.mp3"]["track_number"], "3")
         self.assertEqual(metadata["far.mp3"]["track_number"], "8")
+
+    def test_insert_129_shifts_legacy_manual_numbers_without_visible_locks(self):
+        for via_modal in (False, True):
+            with self.subTest(via_modal=via_modal):
+                controller, metadata = self.track_library(
+                    {"new.mp3": 900, "old.mp3": 129, "next.mp3": 130, "far.mp3": 718}
+                )
+                for filename in controller.archivos:
+                    controller.set_track_number_manual(filename, True)
+                controller.cargar_archivos_mp3(controller.carpeta)
+                if via_modal:
+                    app = Mock(controller_principal=controller)
+                    with patch("app.ui.interaction_workflow.request_track_position", return_value=129):
+                        InteractionWorkflowMixin._position_moved_song_in_main(app, "new.mp3")
+                else:
+                    self.assertTrue(controller.aplicar_cambios_a_archivo("new.mp3", {"track_number": "129"}).success)
+                self.assertEqual(metadata["new.mp3"]["track_number"], "129")
+                self.assertEqual(metadata["old.mp3"]["track_number"], "130")
+                self.assertEqual(metadata["next.mp3"]["track_number"], "131")
+                self.assertEqual(metadata["far.mp3"]["track_number"], "718")
+
+    def test_unlock_allows_collision_shift_even_with_manual_assignment(self):
+        controller, metadata = self.track_library({"new.mp3": 900, "old.mp3": 129})
+        controller.set_track_number_manual("old.mp3", True)
+        controller.change_track_number_lock("old.mp3", True)
+        controller.change_track_number_lock("old.mp3", False)
+        controller.aplicar_cambios_a_archivo("new.mp3", {"track_number": "129"})
+        self.assertEqual(metadata["old.mp3"]["track_number"], "130")
 
     def test_global_reorder_reserves_manual_numbers(self):
         controller, metadata = self.track_library({"a.mp3": 0, "locked.mp3": 1, "b.mp3": 5})
@@ -361,12 +390,12 @@ class ControllerTests(unittest.TestCase):
         other.apply_track_numbers_from_order()
         self.assertEqual(metadata["song.mp3"]["track_number"], "302")
 
-    def test_bulk_explicit_number_is_locked(self):
+    def test_bulk_explicit_number_displaces_unlocked_collisions(self):
         controller, metadata = self.track_library({"a.mp3": 0, "b.mp3": 1})
         count, errors = controller.aplicar_cambios_a_archivos(controller.archivos, {"track_number": "302"})
         self.assertEqual((count, errors), (2, []))
         controller.apply_track_numbers_from_order()
-        self.assertEqual([value["track_number"] for value in metadata.values()], ["302", "302"])
+        self.assertEqual([value["track_number"] for value in metadata.values()], ["303", "302"])
 
     def test_failed_edit_does_not_lock_target(self):
         controller, _metadata = self.track_library({"song.mp3": 0})
@@ -374,9 +403,10 @@ class ControllerTests(unittest.TestCase):
         self.assertFalse(controller.aplicar_cambios_a_archivo("song.mp3", {"track_number": "302"}).success)
         self.assertFalse(controller.get_track_info("song.mp3").is_manually_set)
 
-    def test_explicit_collision_preserves_both_manual_assignments(self):
+    def test_explicit_collision_preserves_user_locked_assignment(self):
         controller, metadata = self.track_library({"a.mp3": 302, "b.mp3": 0})
         controller.aplicar_cambios_a_archivo("a.mp3", {"track_number": "302"})
+        controller.change_track_number_lock("a.mp3", True)
         controller.aplicar_cambios_a_archivo("b.mp3", {"track_number": "302"})
         controller.apply_track_numbers_from_order()
         self.assertEqual([value["track_number"] for value in metadata.values()], ["302", "302"])

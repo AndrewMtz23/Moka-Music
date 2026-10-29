@@ -1,0 +1,13 @@
+services:
+  dev:
+    image: mokamusic-dev:local
+    build: .
+    init: true
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    environment:
+      SDL_AUDIODRIVER: dummy
+    stdin_open: true
+    tty: true
+    command: bash

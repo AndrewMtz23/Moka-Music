@@ -21,6 +21,7 @@ from ..controllers.playback_controller import PlaybackController
 from ..i18n import I18n
 from ..services.song_info_service import SongInfo
 from ..ui_helpers.widgets import ToolTip
+from ..ui_helpers.window_geometry import place_popup
 from ..utils.audio_utils import AudioUtils
 from .player_details import PlayerDetails
 
@@ -393,6 +394,7 @@ class PlayerControls(ttk.Frame):
             style="Player.Horizontal.TScale",
         )
         self.volume_scale.set(self.playback.volume)
+        self._bind_volume_pointer(self.volume_scale)
         self._sync_volume_icon()
 
         self.shuffle_check = ttk.Checkbutton(secondary_frame, text=self.ICON_SHUFFLE, variable=self.shuffle_var)
@@ -457,14 +459,15 @@ class PlayerControls(ttk.Frame):
         width = max(1, canvas.winfo_width())
         height = max(1, canvas.winfo_height())
         compact = width < 620 or height < 400
-        self._configure_layout(compact)
+        short = height < 340
+        self._configure_layout(compact, short=short)
         card_x = 0 if compact else 112
         card_y = 8
         card_w = max(1, width - card_x - 8)
         card_h = min(self.card_frame.winfo_reqheight(), max(1, height - card_y - 12))
-        details_y = card_y + card_h + 20
+        details_y = card_y + card_h + (12 if short else 20)
         details_height = max(1, height - details_y - 4)
-        show_details = details_height >= 100
+        show_details = self.details.fit_height(details_height)
         if hasattr(self, "details_window"):
             canvas.itemconfigure(
                 self.details_window,
@@ -513,15 +516,17 @@ class PlayerControls(ttk.Frame):
 
     def update_details(self, track, upcoming) -> None:
         self.details.update_context(track, upcoming, repeat=self.repeat_enabled())
+        self.after_idle(self._draw_player_shell)
 
     def _notify_context_changed(self, *_args) -> None:
         if self.on_context_changed:
             self.on_context_changed()
 
-    def _configure_layout(self, compact: bool) -> None:
+    def _configure_layout(self, compact: bool, *, short: bool = False) -> None:
         """Reflow existing controls without touching playback state."""
-        if getattr(self, "_compact_layout", None) == compact:
+        if getattr(self, "_layout_mode", None) == (compact, short):
             return
+        self._layout_mode = (compact, short)
         self._compact_layout = compact
         padding = (16, 16) if compact else (70, 20)
         for row in (self.top_row, self.progress_frame, self.transport_frame):
@@ -530,6 +535,10 @@ class PlayerControls(ttk.Frame):
         self.card_frame.rowconfigure(0, minsize=72 if compact else 0)
         self.progress_frame.grid_configure(pady=(4, 0) if compact else (14, 0))
         self.transport_frame.grid_configure(pady=(6, 10) if compact else (12, 20))
+        if short:
+            self.top_row.grid_configure(pady=0)
+            self.progress_frame.grid_configure(pady=0)
+            self.transport_frame.grid_configure(pady=(2, 4))
         size = 72 if compact else 166
         self.vinyl_canvas.configure(width=size, height=size)
         self.shadow_canvas.itemconfigure(self.vinyl_window, width=size, height=size)
@@ -788,13 +797,28 @@ class PlayerControls(ttk.Frame):
         self.playback.set_volume(next_volume)
         self._sync_volume_icon()
 
+    @staticmethod
+    def _bind_volume_pointer(slider: ttk.Scale) -> None:
+        def set_from_pointer(event):
+            minimum, maximum = float(slider.cget("from")), float(slider.cget("to"))
+            start, _ = slider.coords(minimum)
+            end, _ = slider.coords(maximum)
+            if end > start:
+                fraction = max(0.0, min(1.0, (event.x - start) / (end - start)))
+                slider.set(minimum + fraction * (maximum - minimum))
+            slider.focus_set()
+            return "break"  # Prevent ttk's default whole-unit trough jump.
+
+        slider.bind("<Button-1>", set_from_pointer)
+        slider.bind("<B1-Motion>", set_from_pointer)
+
     def _show_volume_modal(self) -> None:
         modal = tk.Toplevel(self)
+        modal.withdraw()
         modal.title(self.t("player.volume_hint"))
         modal.configure(background=self._player_card)
         modal.resizable(False, False)
         modal.transient(self.winfo_toplevel())
-        modal.grab_set()
 
         content = ttk.Frame(modal, style="PlayerCard.TFrame", padding=(18, 16))
         content.pack(fill="both", expand=True)
@@ -807,23 +831,21 @@ class PlayerControls(ttk.Frame):
         )
         value_label.pack(anchor="e")
 
-        volume_var = tk.DoubleVar(value=float(self.playback.volume or 0.0))
+        volume_var = tk.DoubleVar(master=modal, value=float(self.playback.volume or 0.0) * 100)
 
         def update_volume(value: str) -> None:
-            next_volume = max(0.0, min(1.0, float(value)))
-            volume_var.set(next_volume)
+            next_volume = max(0.0, min(1.0, float(value) / 100))
+            volume_var.set(next_volume * 100)
             self.volume_scale.set(next_volume)
-            self.playback.set_volume(next_volume)
-            self._sync_volume_icon()
-            value_label.configure(text=f"{int(next_volume * 100)}%")
+            value_label.configure(text=f"{round(next_volume * 100)}%")
 
         def step_volume(delta: float) -> None:
-            update_volume(str(volume_var.get() + delta))
+            update_volume(str(volume_var.get() + delta * 100))
 
         slider = ttk.Scale(
             content,
             from_=0,
-            to=1,
+            to=100,
             orient="horizontal",
             length=260,
             variable=volume_var,
@@ -831,21 +853,22 @@ class PlayerControls(ttk.Frame):
             style="Player.Horizontal.TScale",
         )
         slider.pack(fill="x", pady=(2, 14))
+        self._bind_volume_pointer(slider)
 
         actions = ttk.Frame(content, style="PlayerCard.TFrame")
         actions.pack(fill="x")
-        ttk.Button(
-            actions, text=self.t("player.volume_down"), command=lambda: step_volume(-0.1), style="PlayerIcon.TButton"
-        ).pack(side="left")
-        ttk.Button(
-            actions, text=self.t("player.volume_up"), command=lambda: step_volume(0.1), style="PlayerIcon.TButton"
-        ).pack(side="left", padx=(8, 0))
+        for text, delta, hint in (("−10%", -0.1, "player.volume_down"), ("+10%", 0.1, "player.volume_up")):
+            button = ttk.Button(
+                actions, text=text, command=lambda step=delta: step_volume(step), style="PlayerIcon.TButton"
+            )
+            button.pack(side="left", padx=(0, 8))
+            ToolTip(button, self.t(hint))
         ttk.Button(actions, text="OK", command=modal.destroy, style="PlayerPrimary.TButton").pack(side="right")
 
-        modal.update_idletasks()
-        parent_x = self.winfo_rootx()
-        parent_y = self.winfo_rooty()
-        modal.geometry(f"+{parent_x + max(20, self.winfo_width() - 340)}+{parent_y + 34}")
+        modal.bind("<Escape>", lambda _event: modal.destroy())
+        place_popup(modal, self)
+        modal.deiconify()
+        modal.grab_set()
         slider.focus_set()
 
     def _toggle_mute(self) -> None:
