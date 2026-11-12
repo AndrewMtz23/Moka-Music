@@ -3,6 +3,8 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Dict
 
+from ..utils.window_chrome import theme_application_captions
+
 ThemeMode = str
 DensityMode = str
 
@@ -569,6 +571,7 @@ class StyleManager:
 
     def _apply_theme_colors(self) -> None:
         self.root.configure(bg=self._get_color("background"))
+        theme_application_captions(self.root, self.current_palette)
         self.root.option_add("*Menu.background", self._get_color("surface"))
         self.root.option_add("*Menu.foreground", self._get_color("text"))
         self.root.option_add("*Menu.activeBackground", self._get_color("primary"))
