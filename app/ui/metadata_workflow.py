@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from tkinter import messagebox, simpledialog
+from tkinter import simpledialog
 from typing import TYPE_CHECKING, Optional
 
 from ..controllers.backup_controller import BackupController
@@ -26,6 +26,7 @@ from ..services.metadata_tools_service import (
 )
 from ..services.playlist_export_service import export_library_report, export_library_view_json, export_playlist
 from ..services.youtube_download_service import YouTubeDownloadResult
+from ..utils import themed_messagebox as messagebox
 from ..utils.ui_formatting import metadata_label_key
 from ..views.modals.backup_history_modal import show_backup_history_modal
 from ..views.modals.change_preview_modal import confirm_change_preview

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import messagebox, simpledialog, ttk
+from tkinter import simpledialog, ttk
 from typing import Callable
 
 from ...services.custom_theme_service import custom_theme_id, dedupe_theme_id
+from ...utils import themed_messagebox as messagebox
 
 
 def manage_custom_themes(

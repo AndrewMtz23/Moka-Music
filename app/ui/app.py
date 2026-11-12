@@ -1,7 +1,7 @@
 import logging
 import queue
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 from typing import Optional
 
 from tkinterdnd2 import DND_FILES, TkinterDnD
@@ -31,6 +31,7 @@ from ..services.online_metadata_service import MusicBrainzClient
 from ..services.song_info_service import SongInfo
 from ..services.youtube_download_service import download_youtube_audio
 from ..ui_helpers.file_dialogs import FileHandler
+from ..utils import themed_messagebox as messagebox
 from ..views.library_panel import build_library_panel
 from ..views.metadata_panel import build_metadata_panel
 from ..views.modals.audio_audit_modal import show_audio_audit_modal
@@ -67,6 +68,7 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         self.logger = logging.getLogger(__name__)
         self.i18n = I18n()
         self.t = self.i18n.t
+        self.root._message_translate = lambda key: self.t(key)
         self.current_language = self.i18n.language
         self.root.title(self.t("app.window_title"))
         self._setup_window()

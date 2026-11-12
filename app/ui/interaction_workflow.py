@@ -3,12 +3,12 @@ from __future__ import annotations
 import os
 from dataclasses import replace
 from pathlib import Path
-from tkinter import messagebox
 
 from ..controllers.add_music_controller import abrir_selector_archivo, agregar_a_lista
 from ..controllers.metadata_controller import MetadataController
 from ..models import SortMode
 from ..services.playback_history_service import record_playback
+from ..utils import themed_messagebox as messagebox
 from ..utils.ui_formatting import format_action_error
 from ..views.modals.incoming_folder_guide_modal import show_incoming_folder_guide
 from ..views.modals.track_position_modal import request_track_position

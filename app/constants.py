@@ -21,7 +21,7 @@ class ColorPalette:
 
 
 APP_NAME: Final[str] = "MokaMusic"
-VERSION: Final[str] = "2.3.7"
+VERSION: Final[str] = "2.3.8"
 COPYRIGHT: Final[str] = "Copyright 2026 MokaMusic"
 
 

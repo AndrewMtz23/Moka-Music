@@ -1,6 +1,8 @@
 import tkinter as tk
-from tkinter import messagebox, simpledialog, ttk
+from tkinter import simpledialog, ttk
 from typing import Callable
+
+from ...utils import themed_messagebox as messagebox
 
 PreviewRow = tuple[str, str, str, str, str]
 

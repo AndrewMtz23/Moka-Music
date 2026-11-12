@@ -4,7 +4,7 @@ import os
 import re
 import tkinter as tk
 from pathlib import Path
-from tkinter import messagebox, simpledialog
+from tkinter import simpledialog
 from typing import Optional
 
 from ..constants import APP_NAME, COPYRIGHT, LOG_FILE, VERSION, UISettings
@@ -33,6 +33,7 @@ from ..services.help_diagnostics_service import (
 from ..services.library_compare_service import compare_libraries
 from ..services.playback_history_service import last_played_map, playback_history_summary, played_paths
 from ..ui_helpers.feedback import ProgressDialog, show_toast
+from ..utils import themed_messagebox as messagebox
 from ..views.modals.about_modal import show_about_modal
 from ..views.modals.custom_theme_manager_modal import manage_custom_themes
 from ..views.modals.info_modal import show_info_modal
