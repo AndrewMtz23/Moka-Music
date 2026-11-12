@@ -118,3 +118,70 @@ class YouTubeDownloadWorkflow:
             return
 
         self._poll_events(events, cancelled, progress, completed=0)
+
+    def _poll_events(
+        self,
+        events: queue.Queue[tuple[str, object]],
+        cancelled: threading.Event,
+        progress: DownloadProgressPort,
+        completed: int,
+    ) -> None:
+        if progress.cancelled:
+            cancelled.set()
+
+        while True:
+            try:
+                kind, payload = events.get_nowait()
+            except queue.Empty:
+                self.ui.schedule(
+                    100,
+                    lambda completed=completed: self._poll_events(events, cancelled, progress, completed),
+                )
+                return
+
+            if kind == "progress":
+                event = payload
+                if not isinstance(event, YouTubeDownloadProgress) or progress.cancelled:
+                    continue
+                if event.percent is not None:
+                    completed = int(event.percent)
+                detail = self._progress_detail(event)
+                progress.update(completed, 100, detail)
+                continue
+
+            progress.close()
+            title = self.ui.translate("youtube_download.title")
+            if kind == "success":
+                result = payload
+                if not isinstance(result, YouTubeDownloadResult):
+                    self.ui.show_error(
+                        title,
+                        self.ui.translate(
+                            "youtube_download.failed",
+                            error="The download service returned an invalid result",
+                        ),
+                    )
+                    return
+                self.ui.show_info(
+                    title,
+                    self.ui.translate("youtube_download.done", path=result.path),
+                )
+                self.ui.download_complete(result)
+                return
+            if kind == "cancelled":
+                self.ui.show_info(title, self.ui.translate("youtube_download.cancelled"))
+                return
+            self.ui.show_error(
+                title,
+                self.ui.translate("youtube_download.failed", error=payload),
+            )
+            return
+
+    def _progress_detail(self, event: YouTubeDownloadProgress) -> str:
+        if event.stage == "downloading":
+            if event.percent is None:
+                return self.ui.translate("youtube_download.downloading")
+            return self.ui.translate("youtube_download.downloading_percent", percent=event.percent)
+        if event.stage == "converting":
+            return self.ui.translate("youtube_download.converting")
+        return self.ui.translate("youtube_download.progress")
