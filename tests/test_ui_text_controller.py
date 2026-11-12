@@ -41,10 +41,17 @@ class UiTextControllerTests(unittest.TestCase):
 
     def test_refresh_text_widgets_uses_registered_keys(self):
         widget = FakeWidget()
+        youtube_button = FakeWidget()
 
-        UiTextController(fake_t).refresh_text_widgets({"artist_label": widget})
+        UiTextController(fake_t).refresh_text_widgets(
+            {
+                "artist_label": widget,
+                "incoming_youtube_download_button": youtube_button,
+            }
+        )
 
         self.assertEqual(widget.options["text"], "metadata.artist")
+        self.assertEqual(youtube_button.options["text"], "button.download_youtube")
 
     def test_refresh_tree_headings(self):
         tree = FakeWidget()
