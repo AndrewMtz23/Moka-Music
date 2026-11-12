@@ -97,3 +97,68 @@ class YouTubeDownloadServiceTests(unittest.TestCase):
             options = youtube_dl.call_args.args[0]
             self.assertEqual(options["format"], "bestaudio/best")
             self.assertTrue(options["windowsfilenames"])
+
+    @patch("app.services.youtube_download_service.shutil.which", return_value="ffmpeg")
+    @patch("app.services.youtube_download_service.YoutubeDL")
+    def test_download_reports_percent_and_conversion_stage(self, youtube_dl, _which):
+        events: list[YouTubeDownloadProgress] = []
+
+        def extract_info(_url, *, download):
+            options = youtube_dl.call_args.args[0]
+            output = Path(options["outtmpl"]["default"].replace("%(title)s.%(ext)s", "Song.mp3"))
+            output.write_bytes(b"mp3 data")
+            options["progress_hooks"][0]({"status": "downloading", "downloaded_bytes": 25, "total_bytes": 100})
+            options["postprocessor_hooks"][0]({"status": "started"})
+            return {"title": "Song", "filepath": str(output)}
+
+        youtube_dl.return_value.__enter__.return_value.extract_info.side_effect = extract_info
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            download_youtube_audio(
+                "https://youtu.be/video01",
+                temp_dir,
+                progress_callback=lambda event: events.append(event),
+            )
+
+        self.assertIn(YouTubeDownloadProgress(stage="downloading", percent=25.0), events)
+        self.assertIn(YouTubeDownloadProgress(stage="converting"), events)
+        self.assertEqual(events[-1], YouTubeDownloadProgress(stage="complete", percent=100.0))
+
+    def test_progress_hook_uses_estimated_size_and_reports_unknown_percentage(self):
+        events = []
+        options = _build_options(Path("C:/Downloads/temp"), events.append)
+
+        options["progress_hooks"][0]({"status": "downloading", "downloaded_bytes": 0, "total_bytes_estimate": 80})
+        options["progress_hooks"][0]({"status": "downloading", "downloaded_bytes": 12})
+
+        self.assertEqual(events[0], YouTubeDownloadProgress(stage="downloading", percent=0.0))
+        self.assertEqual(events[1], YouTubeDownloadProgress(stage="downloading"))
+
+    @patch("app.services.youtube_download_service.shutil.which", return_value="ffmpeg")
+    @patch("app.services.youtube_download_service.YoutubeDL")
+    def test_download_error_is_reported_and_temporary_files_are_removed(self, youtube_dl, _which):
+        def fail(_url, *, download):
+            options = youtube_dl.call_args.args[0]
+            partial = Path(options["outtmpl"]["default"].replace("%(title)s.%(ext)s", "partial.part"))
+            partial.write_bytes(b"partial")
+            raise DownloadError("Video unavailable")
+
+        youtube_dl.return_value.__enter__.return_value.extract_info.side_effect = fail
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(YouTubeDownloadError, "Video unavailable"):
+                download_youtube_audio("https://youtu.be/video01", temp_dir)
+            self.assertEqual(list(Path(temp_dir).iterdir()), [])
+
+    @patch("app.services.youtube_download_service.shutil.which", return_value="ffmpeg")
+    @patch("app.services.youtube_download_service.YoutubeDL")
+    def test_connection_errors_are_preserved_for_the_ui(self, youtube_dl, _which):
+        youtube_dl.return_value.__enter__.return_value.extract_info.side_effect = DownloadError("Connection refused")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(YouTubeDownloadError, "Connection refused"):
+                download_youtube_audio("https://youtu.be/video01", temp_dir)
+
+
+if __name__ == "__main__":
+    unittest.main()
