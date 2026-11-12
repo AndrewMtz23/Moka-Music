@@ -12,7 +12,7 @@
   <a href="https://www.python.org/"><img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white"></a>
   <img alt="Platform Windows" src="https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white">
   <img alt="Tkinter UI" src="https://img.shields.io/badge/ui-Tkinter-2F855A">
-  <img alt="Version 2.3.6" src="https://img.shields.io/badge/version-2.3.6-00A3FF">
+  <img alt="Version 2.3.7" src="https://img.shields.io/badge/version-2.3.7-00A3FF">
 </p>
 
 MokaMusic is a desktop app for playlist preparation and local music library maintenance. Work with two folders side by side, fix metadata in batches, reorder tracks, rename files, export reports, and keep backups before important changes.
@@ -46,6 +46,8 @@ pip install -r requirements.txt
 
 If `python` is not available in your PATH, install Python 3.10+ and enable the option to add it to PATH.
 
+Audio downloading and conversion also require FFmpeg to be installed separately and available on `PATH`. `yt-dlp` is installed with `requirements.txt`; FFmpeg is an external executable and is not bundled with the Python dependencies or Windows app.
+
 ## Run From Source
 
 ```powershell
@@ -78,6 +80,15 @@ Because the current build uses PyInstaller's folder mode, distribute the whole `
 6. Review quality, duplicates, missing cover art, and metadata issues from the `Tools` menu.
 7. Play the current selection with the redesigned bottom player, including vinyl-style cover art, progress, volume, and primary controls.
 8. Before bulk changes, MokaMusic creates backups that can be restored from `Tools`.
+
+## Download Authorized YouTube Audio
+
+1. Select a folder for `Incoming Library`.
+2. Click **Download from YouTube** in the action bar at the bottom of the incoming library.
+3. Paste a YouTube video URL into the modal and confirm that you are authorized to download the content.
+4. Click **Download**. The MP3 is saved into the selected incoming-library folder and the library refreshes when the download finishes.
+
+The download runs in the background and reports download/conversion progress. FFmpeg must be installed separately and available on `PATH`. Encoding to 320 kbps does not improve the source audio quality.
 
 ## Prepare Playlist
 
@@ -242,8 +253,8 @@ After the release workflow is merged into `main`, a successful `Python CI` run o
 You can also create a GitHub Release manually by pushing a version tag:
 
 ```powershell
-git tag v2.3.6
-git push origin v2.3.6
+git tag v2.3.7
+git push origin v2.3.7
 ```
 
 ## Dependencies

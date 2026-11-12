@@ -24,6 +24,7 @@ def check_dependencies() -> tuple[bool, list[str]]:
         ("mutagen", "mutagen"),
         ("tkinterdnd2", "tkinterdnd2"),
         ("send2trash", "Send2Trash"),
+        ("yt_dlp", "yt-dlp"),
     ]
 
     missing: list[str] = []

@@ -25,6 +25,7 @@ from ..services.metadata_tools_service import (
     tool_plan_preview,
 )
 from ..services.playlist_export_service import export_library_report, export_library_view_json, export_playlist
+from ..services.youtube_download_service import YouTubeDownloadResult
 from ..utils.ui_formatting import metadata_label_key
 from ..views.modals.backup_history_modal import show_backup_history_modal
 from ..views.modals.change_preview_modal import confirm_change_preview
@@ -473,6 +474,21 @@ class MetadataWorkflowMixin:
 
     def _convert_selected_audio(self) -> None:
         self.audio_tools_workflow.convert_selected()
+
+    def _download_youtube_audio(self) -> None:
+        incoming_folder = self.controller_nueva.carpeta
+        if not incoming_folder:
+            messagebox.showwarning(
+                self.t("youtube_download.title"),
+                self.t("youtube_download.incoming_folder_required"),
+            )
+            return
+        self.youtube_download_workflow.start(incoming_folder)
+
+    def _refresh_incoming_library_after_youtube_download(self, result: YouTubeDownloadResult) -> None:
+        incoming_folder = self.controller_nueva.carpeta
+        if incoming_folder and Path(incoming_folder).resolve() == result.path.parent.resolve():
+            self._load_folder(self.controller_nueva, self.tree_nueva, folder=incoming_folder)
 
     def _create_metadata_backup_for_groups(
         self,

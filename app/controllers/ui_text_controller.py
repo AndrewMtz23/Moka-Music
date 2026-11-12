@@ -42,6 +42,7 @@ TEXT_WIDGET_KEYS: dict[str, tuple[str, str]] = {
     "quick_search_online_button": ("text", "quick_actions.search_online"),
     "incoming_global_metadata_button": ("text", "button.global_metadata"),
     "incoming_prepare_folder_button": ("text", "button.prepare_folder"),
+    "incoming_youtube_download_button": ("text", "button.download_youtube"),
     "preset_label": ("text", "presets.label"),
     "apply_preset_button": ("text", "presets.apply"),
     "create_preset_button": ("text", "presets.create"),
