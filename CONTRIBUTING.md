@@ -131,8 +131,8 @@ After the release workflow is merged into `main`, a successful `Python CI` run o
 You can also publish a GitHub Release manually by pushing a version tag from `main`:
 
 ```powershell
-git tag v2.3.6
-git push origin v2.3.6
+git tag v2.3.7
+git push origin v2.3.7
 ```
 
 The `GitHub Release` workflow builds the Windows zip and attaches it to the release.
