@@ -94,3 +94,54 @@ class YouTubeDownloadWorkflowTests(unittest.TestCase):
         self.assertEqual(self.calls[0][0], "info")
         self.assertEqual(self.calls[0][3], main_thread)
         self.assertEqual(len(self.completed_downloads), 1)
+
+    def test_cancelled_dialog_does_not_start_download(self):
+        self.options = None
+        workflow = self.create_workflow(lambda *_args, **_kwargs: self.fail("download must not start"))
+
+        workflow.start("C:/Music/Incoming")
+
+        self.assertFalse(self.calls)
+        self.assertFalse(self.progress.closed)
+
+    def test_missing_authorization_does_not_start_download(self):
+        self.options["authorized"] = False
+        workflow = self.create_workflow(lambda *_args, **_kwargs: self.fail("download must not start"))
+
+        workflow.start("C:/Music/Incoming")
+
+        self.assertEqual(self.calls[0][0], "warning")
+
+    def test_invalid_url_is_reported_without_starting_download(self):
+        self.options["url"] = "https://example.com/audio"
+        workflow = self.create_workflow(lambda *_args, **_kwargs: self.fail("download must not start"))
+
+        workflow.start("C:/Music/Incoming")
+
+        self.assertEqual(self.calls[0][0], "error")
+        self.assertIn("youtube_download.invalid_url", self.calls[0][2])
+
+    def test_missing_incoming_library_folder_does_not_open_modal_or_start_download(self):
+        workflow = self.create_workflow(lambda *_args, **_kwargs: self.fail("download must not start"))
+
+        workflow.start("")
+
+        self.assertEqual(self.calls[0][0], "warning")
+        self.assertIn("youtube_download.incoming_folder_required", self.calls[0][2])
+        self.assertFalse(self.progress.updates)
+
+    def test_worker_error_is_reported_to_the_ui(self):
+        def fail(*_args, **_kwargs):
+            raise RuntimeError("network disconnected")
+
+        workflow = self.create_workflow(fail)
+        with self.assertLogs("app.ui.workflows.youtube_download_workflow", level="ERROR"):
+            workflow.start("C:/Music/Incoming")
+            self.root.run_until(self.finished)
+
+        self.assertEqual(self.calls[0][0], "error")
+        self.assertIn("network disconnected", self.calls[0][2])
+
+
+if __name__ == "__main__":
+    unittest.main()
