@@ -6,6 +6,7 @@ from .audio_tools_workflow import (
 )
 from .cover_workflow import CoverLibraryPort, CoverUiPort, CoverWorkflow
 from .playlist_workflow import PlaylistLibraryPort, PlaylistUiPort, PlaylistWorkflow
+from .youtube_download_workflow import YouTubeDownloadUiPort, YouTubeDownloadWorkflow
 
 __all__ = [
     "AudioToolsLibraryPort",
@@ -18,4 +19,6 @@ __all__ = [
     "PlaylistLibraryPort",
     "PlaylistUiPort",
     "PlaylistWorkflow",
+    "YouTubeDownloadUiPort",
+    "YouTubeDownloadWorkflow",
 ]

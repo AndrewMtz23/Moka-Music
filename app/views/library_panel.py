@@ -33,6 +33,7 @@ class LibraryPanelBundle:
     extra_button: ttk.Button | None = None
     second_extra_button: ttk.Button | None = None
     transfer_button: ttk.Button | None = None
+    youtube_download_button: ttk.Button | None = None
 
     def panel_state(self, controller: MetadataController) -> dict[str, object]:
         return {
@@ -79,6 +80,8 @@ def build_library_panel(
     second_extra_action_text: str = "",
     on_second_extra_action: Callable[[], None] | None = None,
     on_move_to_incoming: Callable[[], None] | None = None,
+    download_action_text: str = "",
+    on_download_action: Callable[[], None] | None = None,
 ) -> LibraryPanelBundle:
     frame = ttk.LabelFrame(parent, text=title)
     try:
@@ -285,6 +288,18 @@ def build_library_panel(
         )
         transfer_button.grid(row=0, column=1, sticky="ew", padx=(5, 0), ipady=4)
 
+    youtube_download_button = None
+    if not is_main and download_action_text and on_download_action is not None:
+        action_bar.columnconfigure(1, weight=1, uniform="library_actions")
+        action_button.grid_configure(padx=(0, 5))
+        youtube_download_button = ttk.Button(
+            action_bar,
+            text=download_action_text,
+            command=on_download_action,
+            style="Accent.TButton",
+        )
+        youtube_download_button.grid(row=0, column=1, sticky="ew", padx=(5, 0), ipady=4)
+
     return LibraryPanelBundle(
         frame=frame,
         tree=tree,
@@ -308,4 +323,5 @@ def build_library_panel(
         extra_button=extra_button,
         second_extra_button=second_extra_button,
         transfer_button=transfer_button,
+        youtube_download_button=youtube_download_button,
     )

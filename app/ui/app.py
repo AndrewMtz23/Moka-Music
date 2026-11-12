@@ -29,6 +29,7 @@ from ..services.audio_audit_service import build_audio_quality_rows, detect_adva
 from ..services.audio_conversion_service import build_conversion_items, convert_audio_files
 from ..services.online_metadata_service import MusicBrainzClient
 from ..services.song_info_service import SongInfo
+from ..services.youtube_download_service import download_youtube_audio
 from ..ui_helpers.file_dialogs import FileHandler
 from ..views.library_panel import build_library_panel
 from ..views.metadata_panel import build_metadata_panel
@@ -36,6 +37,7 @@ from ..views.modals.audio_audit_modal import show_audio_audit_modal
 from ..views.modals.audio_conversion_modal import request_audio_conversion_options
 from ..views.modals.playlist_insert_preview_modal import request_playlist_insert_preview
 from ..views.modals.track_position_modal import request_track_position
+from ..views.modals.youtube_download_modal import request_youtube_download_options
 from ..views.player_panel import PlayerControls
 from ..views.preview_panel import PreviewPanel
 from .app_lifecycle import AppLifecycleMixin
@@ -54,6 +56,8 @@ from .workflows import (
     PlaylistLibraryPort,
     PlaylistUiPort,
     PlaylistWorkflow,
+    YouTubeDownloadUiPort,
+    YouTubeDownloadWorkflow,
 )
 
 
@@ -132,6 +136,7 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         self._setup_cover_workflow()
         self._setup_playlist_workflow()
         self._setup_audio_tools_workflow()
+        self._setup_youtube_download_workflow()
         self._bind_events()
         self._load_config()
         self.root.after(200, self._show_first_run_welcome)
@@ -249,6 +254,19 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
             operations=operations,
         )
 
+    def _setup_youtube_download_workflow(self) -> None:
+        ui = YouTubeDownloadUiPort(
+            translate=self.t,
+            request_options=lambda destination: request_youtube_download_options(self.root, self.t, destination),
+            begin_progress=self._begin_progress,
+            show_warning=messagebox.showwarning,
+            show_info=messagebox.showinfo,
+            show_error=messagebox.showerror,
+            schedule=self.root.after,
+            download_complete=self._refresh_incoming_library_after_youtube_download,
+        )
+        self.youtube_download_workflow = YouTubeDownloadWorkflow(ui=ui, download=download_youtube_audio)
+
     def _setup_ui(self) -> None:
         main_panel = ttk.Frame(self.root)
         main_panel.pack(fill="both", expand=True, padx=14, pady=14)
@@ -352,6 +370,8 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
             on_extra_action=None if is_main else self._toggle_global_metadata_view,
             second_extra_action_text="" if is_main else self.t("button.prepare_folder"),
             on_second_extra_action=None if is_main else self._show_incoming_folder_guide,
+            download_action_text="" if is_main else self.t("button.download_youtube"),
+            on_download_action=None if is_main else self._download_youtube_audio,
         )
 
         self._library_panels.append(bundle.panel_state(controller))
@@ -378,6 +398,8 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
                 self._ui_text_widgets["incoming_global_metadata_button"] = bundle.extra_button
             if bundle.second_extra_button is not None:
                 self._ui_text_widgets["incoming_prepare_folder_button"] = bundle.second_extra_button
+            if bundle.youtube_download_button is not None:
+                self._ui_text_widgets["incoming_youtube_download_button"] = bundle.youtube_download_button
 
     def _setup_metadata_panel(self, parent) -> None:
         bundle = build_metadata_panel(
