@@ -69,3 +69,91 @@ def validate_youtube_url(url: str) -> str:
     if not video_id or not all(character.isalnum() or character in "_-" for character in video_id):
         raise InvalidYouTubeUrlError("Enter a valid YouTube video URL")
     return candidate
+
+
+def download_youtube_audio(
+    url: str,
+    output_directory: str | Path,
+    *,
+    progress_callback: ProgressCallback | None = None,
+) -> YouTubeDownloadResult:
+    valid_url = validate_youtube_url(url)
+    destination = Path(output_directory)
+    if shutil.which("ffmpeg") is None:
+        raise FFmpegUnavailableError("FFmpeg was not found on PATH")
+
+    if not destination.is_dir():
+        raise YouTubeDownloadError(f"Download destination is not a folder: {destination}")
+
+    with tempfile.TemporaryDirectory(prefix=".mokamusic-ytdlp-", dir=destination) as temporary_directory:
+        temp_path = Path(temporary_directory)
+        options = _build_options(temp_path, progress_callback)
+        try:
+            with YoutubeDL(options) as downloader:
+                info = downloader.extract_info(valid_url, download=True)
+        except DownloadError as exc:
+            raise YouTubeDownloadError(str(exc)) from exc
+        except OSError as exc:
+            raise YouTubeDownloadError(f"Download or conversion failed: {exc}") from exc
+
+        if not info:
+            raise YouTubeDownloadError("yt-dlp did not return video information")
+
+        source = _find_converted_mp3(temp_path, info)
+        target = _move_to_unique_destination(source, destination)
+        _report(progress_callback, YouTubeDownloadProgress(stage="complete", percent=100.0))
+        return YouTubeDownloadResult(title=str(info.get("title") or source.stem), path=target)
+
+
+def _build_options(output_directory: Path, progress_callback: ProgressCallback | None) -> dict[str, object]:
+    return {
+        "format": "bestaudio/best",
+        "outtmpl": {"default": str(output_directory / "%(title)s.%(ext)s")},
+        "postprocessors": [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "320",
+            }
+        ],
+        "windowsfilenames": True,
+        "overwrites": False,
+        "noplaylist": True,
+        "quiet": True,
+        "no_warnings": True,
+        "progress_hooks": [_download_hook(progress_callback)],
+        "postprocessor_hooks": [_postprocessor_hook(progress_callback)],
+    }
+
+
+def _download_hook(progress_callback: ProgressCallback | None) -> Callable[[dict[str, object]], None]:
+    def report(data: dict[str, object]) -> None:
+        status = data.get("status")
+        if status == "downloading":
+            downloaded = data.get("downloaded_bytes")
+            total = data.get("total_bytes") or data.get("total_bytes_estimate")
+            percent = round(float(downloaded) * 100 / float(total), 1) if downloaded is not None and total else None
+            _report(progress_callback, YouTubeDownloadProgress(stage="downloading", percent=percent))
+        elif status == "finished":
+            _report(progress_callback, YouTubeDownloadProgress(stage="downloading", percent=100.0))
+
+    return report
+
+
+def _postprocessor_hook(progress_callback: ProgressCallback | None) -> Callable[[dict[str, object]], None]:
+    def report(data: dict[str, object]) -> None:
+        status = data.get("status")
+        if status in {"started", "processing"}:
+            _report(progress_callback, YouTubeDownloadProgress(stage="converting"))
+        elif status == "finished":
+            _report(progress_callback, YouTubeDownloadProgress(stage="converting", percent=100.0))
+
+    return report
+
+
+def _report(
+    callback: ProgressCallback | None,
+    progress: YouTubeDownloadProgress,
+) -> None:
+    if callback is not None and callback(progress) is False and progress.stage != "complete":
+        raise YouTubeDownloadCancelled("Download cancelled")
