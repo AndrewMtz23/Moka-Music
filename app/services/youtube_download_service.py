@@ -157,3 +157,48 @@ def _report(
 ) -> None:
     if callback is not None and callback(progress) is False and progress.stage != "complete":
         raise YouTubeDownloadCancelled("Download cancelled")
+
+
+def _find_converted_mp3(temp_directory: Path, info: dict[str, object]) -> Path:
+    filepath = info.get("filepath")
+    if filepath:
+        candidate = Path(str(filepath))
+        if candidate.suffix.lower() == ".mp3" and candidate.is_file():
+            return candidate
+
+    candidates = list(temp_directory.glob("*.mp3"))
+    if len(candidates) == 1:
+        return candidates[0]
+    raise YouTubeDownloadError("The MP3 file was not created by yt-dlp")
+
+
+def _move_to_unique_destination(source: Path, destination: Path) -> Path:
+    target = destination / source.name
+    index = 2
+    while True:
+        try:
+            os.link(source, target)
+        except FileExistsError:
+            target = _numbered_destination(destination, source.name, index)
+            index += 1
+            continue
+        except OSError:
+            try:
+                with source.open("rb") as source_file, target.open("xb") as target_file:
+                    shutil.copyfileobj(source_file, target_file)
+            except FileExistsError:
+                target = _numbered_destination(destination, source.name, index)
+                index += 1
+                continue
+            except OSError:
+                if target.exists():
+                    target.unlink()
+                raise
+
+        source.unlink()
+        return target
+
+
+def _numbered_destination(directory: Path, filename: str, index: int) -> Path:
+    path = Path(filename)
+    return directory / f"{path.stem} ({index}){path.suffix}"
