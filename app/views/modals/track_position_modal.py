@@ -1,6 +1,8 @@
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 from typing import Callable
+
+from ...utils import themed_messagebox as messagebox
 
 
 def request_track_position(

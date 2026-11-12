@@ -2,7 +2,7 @@ import io
 import logging
 import os
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
 from typing import Callable, Optional
 
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -16,6 +16,7 @@ from ..services.file_service import (
     parse_dropped_audio_files,
     shorten_filename,
 )
+from ..utils import themed_messagebox as messagebox
 
 
 class FileHandler:

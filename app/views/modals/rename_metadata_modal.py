@@ -1,6 +1,8 @@
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 from typing import Callable
+
+from ...utils import themed_messagebox as messagebox
 
 
 def confirm_rename_metadata(parent, translator: Callable[..., str], plan) -> bool:

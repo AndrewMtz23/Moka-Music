@@ -4,11 +4,11 @@ import os
 import queue
 import threading
 import time
-from tkinter import messagebox
 from typing import Optional
 
 from ..controllers.metadata_controller import MetadataController
 from ..models import FilterMode, SortMode
+from ..utils import themed_messagebox as messagebox
 from ..utils.ui_formatting import filename_from_tree_item
 
 

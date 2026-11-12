@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import ttk
 from typing import Callable, Optional
 
 from ...services.online_metadata_service import OnlineMetadataResult
+from ...utils import themed_messagebox as messagebox
 
 FIELDS = ("title", "artist", "album", "year", "genre")
 
