@@ -81,6 +81,7 @@ class ThemedDialogTests(unittest.TestCase):
                     widget = pending.pop()
                     if isinstance(widget, ttk.Button) and widget.cget("text") == label:
                         widget.focus_force()
+                        self.root.update()
                         widget.event_generate(key)
                         return
                     pending.extend(widget.winfo_children())
