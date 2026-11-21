@@ -88,7 +88,7 @@ class AudioUtils:
         """
         try:
             audio = mutagen.File(file_path, easy=True)
-            return audio.info.length if audio else 0.0
+            return audio.info.length if audio is not None else 0.0
         except Exception:
             return 0.0
 
