@@ -12,15 +12,19 @@
   <a href="https://www.python.org/"><img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white"></a>
   <img alt="Platform Windows" src="https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white">
   <img alt="Tkinter UI" src="https://img.shields.io/badge/ui-Tkinter-2F855A">
-  <img alt="Version 2.3.9" src="https://img.shields.io/badge/version-2.3.9-00A3FF">
+  <img alt="Version 3.0.0" src="https://img.shields.io/badge/version-3.0.0-00A3FF">
 </p>
 
 MokaMusic is a desktop app for playlist preparation and local music library maintenance. Work with two folders side by side, fix metadata in batches, reorder tracks, rename files, export reports, and keep backups before important changes.
 
-## What is new in 2.3.9
+## What is new in 3.0.0
 
-- Correct audio duration detection for files without metadata tags.
-- Preserve keyboard interaction coverage for themed dialogs.
+- Add a non-destructive audio editor with sequence and multitrack editing.
+- Save projects, recover sessions, and relink missing sources.
+- Trim song intros and outros, audition boundaries, and play from a timeline position.
+- Use fades, crossfades, regions, markers, and audio effects.
+- Export MP3, OGG, WAV, and FLAC with configurable quality.
+- Improve cancellation and release temporary playback files on Windows.
 
 ## Highlights
 
@@ -258,8 +262,8 @@ After the release workflow is merged into `main`, a successful `Python CI` run o
 You can also create a GitHub Release manually by pushing a version tag:
 
 ```powershell
-git tag v2.3.9
-git push origin v2.3.9
+git tag v3.0.0
+git push origin v3.0.0
 ```
 
 ## Dependencies
