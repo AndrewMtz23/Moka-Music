@@ -715,10 +715,23 @@ class PlayerControls(ttk.Frame):
             self.track_info_label.configure(text=self.t("player.audio_error", error=exc))
             return False
 
-    def play(self) -> None:
+    def clear_file(self) -> None:
+        self.playback.clear()
+        self._current_title = self.t("player.no_track")
+        self._current_artist = ""
+        self._cover_photo = self._cover_photo_from_file(None)
+        self.track_info_label.configure(text=self._current_title)
+        self.artist_label.configure(text="")
+        self._set_transport_enabled(False)
+        self._reset_visualizer()
+        self._draw_vinyl()
+        self._sync_time_display(0.0)
+        self.btn_play_pause.configure(text=self._play_pause_icon())
+
+    def play(self, *, loop: bool = False) -> None:
         if not self.playback.current_file:
             return
-        state = self.playback.play()
+        state = self.playback.play(loop=True) if loop else self.playback.play()
         self.btn_play_pause.configure(text=self._play_pause_icon())
         self.track_info_label.configure(text=self._current_title)
         self.artist_label.configure(text=self._current_artist)

@@ -36,9 +36,9 @@ class PlaybackController:
         self.last_position = 0.0
         return self.state(position=0.0)
 
-    def play(self) -> PlaybackState:
+    def play(self, *, loop: bool = False) -> PlaybackState:
         if self.current_file:
-            self.player.play()
+            self.player.play(loop=True) if loop else self.player.play()
         return self.state()
 
     def pause(self) -> PlaybackState:
@@ -57,6 +57,13 @@ class PlaybackController:
             self.player.seek(0.0)
             self.last_position = 0.0
             self.player.play()
+        return self.state(position=0.0)
+
+    def clear(self) -> PlaybackState:
+        self.player.unload()
+        self.current_file = None
+        self.duration = 0.0
+        self.last_position = 0.0
         return self.state(position=0.0)
 
     def seek_relative(self, seconds: float) -> PlaybackState:

@@ -25,6 +25,7 @@ class AudioPlayer:
         self._track_ended = False
         self._was_playing = False
         self._position_offset = 0.0
+        self._loop = False
         self._setup_mixer()
 
     def _setup_mixer(self) -> None:
@@ -60,21 +61,24 @@ class AudioPlayer:
         self._track_ended = False
         self._was_playing = False
         self._position_offset = 0.0
+        self._loop = False
 
-    def play(self) -> None:
+    def play(self, *, loop: bool = False) -> None:
         if not self._available or not self.current_track:
             return
         if self.is_paused:
             pygame.mixer.music.unpause()
         else:
+            self._loop = loop
+            options = {"loops": -1} if loop else {}
             try:
-                pygame.mixer.music.play(start=self._position_offset)
+                pygame.mixer.music.play(start=self._position_offset, **options)
             except TypeError:
-                pygame.mixer.music.play()
+                pygame.mixer.music.play(**options)
             except Exception as exc:
                 self.logger.warning("Unable to start at %.2fs: %s", self._position_offset, exc)
                 self._position_offset = 0.0
-                pygame.mixer.music.play()
+                pygame.mixer.music.play(**options)
         self.is_paused = False
         self._track_ended = False
         self._was_playing = True
@@ -93,11 +97,25 @@ class AudioPlayer:
         self._track_ended = False
         self._was_playing = False
         self._position_offset = 0.0
+        self._loop = False
 
     def set_volume(self, volume: float) -> None:
         self.volume = max(0.0, min(1.0, float(volume)))
         if self._available:
             pygame.mixer.music.set_volume(self.volume)
+
+    def unload(self) -> None:
+        """Release the loaded file, including SDL's Windows file handle."""
+        self.stop()
+        if self._available:
+            pygame.mixer.music.unload()
+        self.current_track = None
+        self.duration = 0.0
+        self._position_offset = 0.0
+        self.is_paused = False
+        self._track_ended = False
+        self._was_playing = False
+        self._loop = False
 
     def is_playing(self) -> bool:
         return bool(self._available and pygame.mixer.music.get_busy() and not self.is_paused)
@@ -108,7 +126,10 @@ class AudioPlayer:
         milliseconds = pygame.mixer.music.get_pos()
         if milliseconds < 0:
             return self._position_offset
-        return min(self.duration or 0.0, self._position_offset + (milliseconds / 1000.0))
+        position = self._position_offset + milliseconds / 1000.0
+        if self._loop and self.duration > 0:
+            return position % self.duration
+        return min(self.duration or 0.0, position)
 
     def seek(self, position_seconds: float, *, resume: bool = True) -> float:
         if not self.current_track:
@@ -123,7 +144,7 @@ class AudioPlayer:
 
         was_playing = self.is_playing()
         try:
-            pygame.mixer.music.play(start=target)
+            pygame.mixer.music.play(start=target, **({"loops": -1} if self._loop else {}))
             if not resume and not was_playing:
                 pygame.mixer.music.pause()
                 self.is_paused = True
