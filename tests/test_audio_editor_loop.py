@@ -1,3 +1,4 @@
+import importlib
 import tkinter as tk
 import unittest
 from pathlib import Path
@@ -143,7 +144,7 @@ class EditorLoopTests(unittest.TestCase):
 
 class NativeLoopTests(unittest.TestCase):
     def test_native_loop_wraps_position_and_pause_resume_preserves_loop(self):
-        with patch("app.services.playback.audio_player.pygame") as pygame:
+        with patch.object(importlib.import_module("app.services.playback.audio_player"), "pygame") as pygame:
             player = AudioPlayer()
             player.current_track = "region.wav"
             player.duration = 3
