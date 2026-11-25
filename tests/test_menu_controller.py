@@ -113,6 +113,7 @@ class MenuControllerTests(unittest.TestCase):
             analyze_audio_quality=record("analyze_audio_quality"),
             detect_advanced_duplicates=record("advanced_duplicates"),
             validate_audio_files=record("validate_audio_files"),
+            open_audio_editor=record("open_audio_editor"),
             convert_audio=record("convert_audio"),
             rename_files_by_template=record("rename_template"),
             organize_files_by_folders=record("organize_files"),
@@ -250,9 +251,27 @@ class MenuControllerTests(unittest.TestCase):
                 "menu.analyze_audio_quality",
                 "menu.detect_advanced_duplicates",
                 "menu.validate_audio_files",
+                "menu.open_audio_editor",
                 "menu.convert_audio",
             ],
         )
+
+    def test_installed_tools_menu_includes_audio_editor(self):
+        root = FakeRoot()
+        callbacks, calls = self.callbacks()
+        controller = MenuController(root, fake_t, callbacks)
+
+        with patch("app.controllers.menu_controller.tk.Menu", FakeMenu):
+            tools_menu = controller._build_tools_menu(root)
+
+        audio_cascade = next(cascade for cascade in tools_menu.cascades if cascade["label"] == "menu.audio_tools")
+        audio_menu = audio_cascade["menu"]
+        editor_command = next(
+            command for command in audio_menu.commands if command.get("label") == "menu.open_audio_editor"
+        )
+        editor_command["command"]()
+
+        self.assertIn(("open_audio_editor", ()), calls)
 
     def test_tools_menu_includes_organization_submenu(self):
         root = FakeRoot()

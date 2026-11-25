@@ -41,6 +41,7 @@ class MenuCallbacks:
     analyze_audio_quality: Callable[[], None]
     detect_advanced_duplicates: Callable[[], None]
     validate_audio_files: Callable[[], None]
+    open_audio_editor: Callable[[], None]
     convert_audio: Callable[[], None]
     rename_files_by_template: Callable[[], None]
     organize_files_by_folders: Callable[[], None]
@@ -147,6 +148,7 @@ class MenuController:
         )
         audio_menu.add_command(label=self.t("menu.validate_audio_files"), command=self.callbacks.validate_audio_files)
         audio_menu.add_separator()
+        audio_menu.add_command(label=self.t("menu.open_audio_editor"), command=self.callbacks.open_audio_editor)
         audio_menu.add_command(label=self.t("menu.convert_audio"), command=self.callbacks.convert_audio)
         tools_menu.add_cascade(label=self.t("menu.audio_tools"), menu=audio_menu)
         organization_menu = self._menu(tools_menu, tearoff=0)
@@ -345,6 +347,7 @@ class MenuController:
         )
         audio_menu.add_command(label=self.t("menu.validate_audio_files"), command=self.callbacks.validate_audio_files)
         audio_menu.add_separator()
+        audio_menu.add_command(label=self.t("menu.open_audio_editor"), command=self.callbacks.open_audio_editor)
         audio_menu.add_command(label=self.t("menu.convert_audio"), command=self.callbacks.convert_audio)
         tools_menu.add_cascade(label=self.t("menu.audio_tools"), menu=audio_menu)
         organization_menu = self._menu(tools_menu, tearoff=0)

@@ -1,3 +1,4 @@
+from .audio_editor_workflow import AudioEditorLibraryPort, AudioEditorUiPort, AudioEditorWorkflow
 from .audio_tools_workflow import (
     AudioToolsLibraryPort,
     AudioToolsOperations,
@@ -9,6 +10,9 @@ from .playlist_workflow import PlaylistLibraryPort, PlaylistUiPort, PlaylistWork
 from .youtube_download_workflow import YouTubeDownloadUiPort, YouTubeDownloadWorkflow
 
 __all__ = [
+    "AudioEditorLibraryPort",
+    "AudioEditorUiPort",
+    "AudioEditorWorkflow",
     "AudioToolsLibraryPort",
     "AudioToolsOperations",
     "AudioToolsUiPort",

@@ -1,6 +1,7 @@
 import logging
 import queue
 import tkinter as tk
+from pathlib import Path
 from tkinter import ttk
 from typing import Optional
 
@@ -32,6 +33,7 @@ from ..services.song_info_service import SongInfo
 from ..services.youtube_download_service import download_youtube_audio
 from ..ui_helpers.file_dialogs import FileHandler
 from ..utils import themed_messagebox as messagebox
+from ..views.audio_editor_dashboard import AudioEditorDashboard
 from ..views.library_panel import build_library_panel
 from ..views.metadata_panel import build_metadata_panel
 from ..views.modals.audio_audit_modal import show_audio_audit_modal
@@ -47,6 +49,9 @@ from .library_workflow import LibraryWorkflowMixin
 from .metadata_workflow import MetadataWorkflowMixin
 from .theme import StyleManager
 from .workflows import (
+    AudioEditorLibraryPort,
+    AudioEditorUiPort,
+    AudioEditorWorkflow,
     AudioToolsLibraryPort,
     AudioToolsOperations,
     AudioToolsUiPort,
@@ -139,6 +144,7 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
         self._setup_playlist_workflow()
         self._setup_audio_tools_workflow()
         self._setup_youtube_download_workflow()
+        self._setup_audio_editor_workflow()
         self._bind_events()
         self._load_config()
         self.root.after(200, self._show_first_run_welcome)
@@ -268,6 +274,84 @@ class MokaMusicApp(AppLifecycleMixin, MetadataWorkflowMixin, LibraryWorkflowMixi
             download_complete=self._refresh_incoming_library_after_youtube_download,
         )
         self.youtube_download_workflow = YouTubeDownloadWorkflow(ui=ui, download=download_youtube_audio)
+
+    def _setup_audio_editor_workflow(self) -> None:
+        library = AudioEditorLibraryPort(selected_audio_paths=self._audio_editor_selected_paths)
+        ui = AudioEditorUiPort(
+            translate=self.t,
+            show_warning=messagebox.showwarning,
+            open_editor=self._open_audio_editor_dashboard,
+            has_saved_project=lambda: self.config_controller.path.with_name("mokamusic_editor_project.json").exists(),
+        )
+        self.audio_editor_workflow = AudioEditorWorkflow(library=library, ui=ui)
+
+    def _audio_editor_selected_paths(self) -> list[Path]:
+        return [
+            Path(controller.carpeta) / filename
+            for controller, _tree, filenames in self._selected_filenames_by_controller()
+            for filename in filenames
+        ]
+
+    def _open_audio_editor_dashboard(self, source_paths: list[Path]) -> None:
+        existing = getattr(self, "audio_editor_window", None)
+        if existing is not None and existing.winfo_exists():
+            existing.deiconify()
+            existing.lift()
+            return
+        playback_snapshot = self.player.playback.state()
+        incoming_folder = Path(self.controller_nueva.carpeta) if self.controller_nueva.carpeta else None
+        if incoming_folder is None or not incoming_folder.is_dir():
+            incoming_folder = source_paths[0].parent if source_paths else None
+        self.audio_editor_window = AudioEditorDashboard(
+            self.root,
+            source_paths=source_paths,
+            translate=self.t,
+            colors=self.style_manager.get_theme_colors(),
+            playback_snapshot=playback_snapshot,
+            play_preview=self._audio_editor_play_preview,
+            play_loop_preview=lambda path: self._audio_editor_play_preview(path, loop=True),
+            pause_preview=self.player.pause,
+            resume_preview=self.player.play,
+            stop_preview=self.player.stop,
+            preview_is_playing=lambda: self.player.playback.state().is_playing,
+            restore_playback=self._audio_editor_restore_playback,
+            playback_position=lambda: self.player.playback.state().position,
+            export_completed=self._audio_editor_export_completed,
+            initial_export_folder=incoming_folder,
+            project_path=self.config_controller.path.with_name("mokamusic_editor_project.json"),
+        )
+
+    def _audio_editor_play_preview(self, path: Path, *, loop: bool = False) -> None:
+        self.player.stop()
+        if not self.player.load_file(str(path)):
+            raise RuntimeError(self.t("audio_editor.preview_failed", error=path))
+        self.player.play(loop=True) if loop else self.player.play()
+
+    def _audio_editor_restore_playback(self, snapshot: object | None) -> None:
+        self.player.stop()
+        filepath = getattr(snapshot, "current_file", None)
+        if not filepath:
+            self.player.clear_file()
+            return
+        if not Path(filepath).is_file():
+            raise FileNotFoundError(filepath)
+        if not self.player.load_file(filepath):
+            raise RuntimeError(self.t("player.audio_error", error=filepath))
+        self.player.playback.set_volume(float(getattr(snapshot, "volume", self.player.playback.volume)))
+        position = max(0.0, float(getattr(snapshot, "position", 0.0)))
+        if position:
+            self.player.playback.seek_absolute(position)
+        if bool(getattr(snapshot, "is_playing", False)):
+            self.player.play()
+        self.player._sync_volume_icon()
+
+    def _audio_editor_export_completed(self, path: Path) -> None:
+        incoming_folder = Path(self.controller_nueva.carpeta) if self.controller_nueva.carpeta else None
+        if incoming_folder is None or path.parent.resolve() != incoming_folder.resolve():
+            return
+        self.controller_nueva.register_file(path.name)
+        if hasattr(self, "tree_nueva"):
+            self._refresh_library_tree(self.controller_nueva, self.tree_nueva)
 
     def _setup_ui(self) -> None:
         main_panel = ttk.Frame(self.root)

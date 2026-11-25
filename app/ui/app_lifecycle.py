@@ -108,6 +108,7 @@ class AppLifecycleMixin:
             analyze_audio_quality=self._analyze_audio_quality,
             detect_advanced_duplicates=self._detect_advanced_duplicates,
             validate_audio_files=self._validate_audio_files,
+            open_audio_editor=lambda: self.audio_editor_workflow.open(),
             convert_audio=self._convert_selected_audio,
             rename_files_by_template=self._rename_files_by_template,
             organize_files_by_folders=self._organize_files_by_folders,
@@ -713,6 +714,9 @@ class AppLifecycleMixin:
             self.player.refresh_theme()
         if hasattr(self, "preview"):
             self.preview.refresh_theme(colors)
+        editor = getattr(self, "audio_editor_window", None)
+        if editor is not None and editor.winfo_exists():
+            editor.refresh_theme(colors, self.style_manager.base_font)
 
     def _change_language(self, language: str) -> None:
         self.current_language = normalize_language(language)
@@ -861,6 +865,11 @@ class AppLifecycleMixin:
     def _on_close(self) -> None:
         if not messagebox.askokcancel(self.t("dialog.exit"), self.t("message.close_app", app_name=APP_NAME)):
             return
+        editor = getattr(self, "audio_editor_window", None)
+        if editor is not None and editor.winfo_exists():
+            editor.close()
+            if editor.winfo_exists():
+                return
         try:
             self._save_config()
             self.player.cleanup()
