@@ -22,7 +22,7 @@ class EditorProjectTests(unittest.TestCase):
             self.root, source_paths=[], translate=I18n("en").t, colors=THEME_PRESETS["dark"]
         )
         self.addCleanup(self.cleanup)
-        self.path = Path(self.folder.name) / "mix.moka-project.json"
+        self.path = Path(self.folder.name).resolve() / "mix.moka-project.json"
 
     def cleanup(self):
         self.editor._project_path = None
@@ -31,7 +31,7 @@ class EditorProjectTests(unittest.TestCase):
         self.root.destroy()
 
     def add_clip(self):
-        self.editor._clips = [AudioEditClip(Path(self.folder.name) / "missing.wav", 0, 3, id="clip")]
+        self.editor._clips = [AudioEditClip(Path(self.folder.name).resolve() / "missing.wav", 0, 3, id="clip")]
         self.editor._refresh_project()
 
     def test_save_as_cancel_keeps_document_and_dirty_state(self):
@@ -100,7 +100,7 @@ class EditorProjectTests(unittest.TestCase):
 
     def test_failed_save_as_keeps_original_path(self):
         self.add_clip()
-        old_path = Path(self.folder.name) / "previous.json"
+        old_path = Path(self.folder.name).resolve() / "previous.json"
         self.editor._project_path = old_path
         with (
             patch("app.views.audio_editor_projects.filedialog.asksaveasfilename", return_value=str(self.path)),
@@ -112,14 +112,14 @@ class EditorProjectTests(unittest.TestCase):
         self.assertTrue(self.editor._project_is_dirty())
 
     def test_source_list_changes_are_dirty(self):
-        self.editor._paths = [Path(self.folder.name) / "source.wav"]
+        self.editor._paths = [Path(self.folder.name).resolve() / "source.wav"]
         self.editor._refresh_source_list()
         self.assertTrue(self.editor._project_is_dirty())
         self.assertIn("*", self.editor.title())
 
     def test_named_close_discard_restores_saved_state_in_recovery(self):
         self.add_clip()
-        self.editor._session_path = Path(self.folder.name) / "session.json"
+        self.editor._session_path = Path(self.folder.name).resolve() / "session.json"
         with patch("app.views.audio_editor_projects.filedialog.asksaveasfilename", return_value=str(self.path)):
             self.assertTrue(self.editor._save_project_as())
         saved = self.editor._project
@@ -133,7 +133,7 @@ class EditorProjectTests(unittest.TestCase):
     def test_named_close_cancel_leaves_recovery_untouched(self):
         self.add_clip()
         self.editor._project_path = self.path
-        self.editor._session_path = Path(self.folder.name) / "session.json"
+        self.editor._session_path = Path(self.folder.name).resolve() / "session.json"
         with patch("app.views.audio_editor_projects.messagebox.askyesnocancel", return_value=None):
             self.assertFalse(self.editor._prepare_project_close())
         self.assertFalse(self.editor._session_path.exists())
@@ -163,7 +163,7 @@ class EditorProjectTests(unittest.TestCase):
 
     def test_recovery_restores_named_document_identity(self):
         self.add_clip()
-        session = Path(self.folder.name) / "session.json"
+        session = Path(self.folder.name).resolve() / "session.json"
         self.editor._session_path = session
         with patch("app.views.audio_editor_projects.filedialog.asksaveasfilename", return_value=str(self.path)):
             self.assertTrue(self.editor._save_project_as())

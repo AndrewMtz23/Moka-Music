@@ -22,8 +22,8 @@ class EditorRelinkTests(unittest.TestCase):
         gc.collect()
         self.folder = TemporaryDirectory()
         self.addCleanup(self.folder.cleanup)
-        self.old = Path(self.folder.name) / "missing.wav"
-        self.new = Path(self.folder.name) / "moved.wav"
+        self.old = Path(self.folder.name).resolve() / "missing.wav"
+        self.new = Path(self.folder.name).resolve() / "moved.wav"
         self.new.write_bytes(b"audio")
         self.root = tk.Tk()
         self.root.withdraw()
@@ -104,7 +104,7 @@ class EditorRelinkTests(unittest.TestCase):
         self.editor.after_cancel(self.editor._poll_id)
         self.editor._poll_results()
         self.assertEqual(self.editor._paths, [self.new])
-        self.editor._project_path = Path(self.folder.name) / "project.json"
+        self.editor._project_path = Path(self.folder.name).resolve() / "project.json"
         self.assertTrue(self.editor._save_editor_project())
         project, sources = load_editor_project(self.editor._project_path)
         self.assertEqual(sources, [self.new])
@@ -166,7 +166,7 @@ class EditorRelinkTests(unittest.TestCase):
 
     def test_undo_relink_keeps_later_imports(self):
         self.assertTrue(self.apply())
-        extra = Path(self.folder.name) / "added.wav"
+        extra = Path(self.folder.name).resolve() / "added.wav"
         self.editor._paths.append(extra)
         self.editor._undo()
         self.assertEqual(self.editor._paths, [self.old, extra])
@@ -174,7 +174,7 @@ class EditorRelinkTests(unittest.TestCase):
         self.assertEqual(self.editor._paths, [self.new, extra])
 
     def test_undo_relink_does_not_restore_later_removed_sources(self):
-        extra = Path(self.folder.name) / "removed.wav"
+        extra = Path(self.folder.name).resolve() / "removed.wav"
         self.editor._paths.append(extra)
         self.assertTrue(self.apply())
         self.editor._paths.remove(extra)
