@@ -382,6 +382,8 @@ def build_render_command(
             if clip.fade_out > 0:
                 fade_start = clip.duration - clip.fade_out
                 chain += f",afade=t=out:st={fade_start:.9f}:d={clip.fade_out:.9f}"
+            if clip.leveling_gain_db:
+                chain += f",volume={clip.leveling_gain_db:.6f}dB"
             filter_chains.append(f"{chain}[{label}]")
             track_labels.append((clip, label))
             clip_index += 1

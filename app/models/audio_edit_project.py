@@ -112,6 +112,7 @@ class AudioEditClip:
     pan: float = 0.0
     processing: AudioEditProcessing = field(default_factory=AudioEditProcessing)
     effects: tuple[AudioEditEffect, ...] = ()
+    leveling_gain_db: float = 0.0
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "source_path", Path(self.source_path))
@@ -124,6 +125,7 @@ class AudioEditClip:
             "crossfade_in",
             "gain_db",
             "pan",
+            "leveling_gain_db",
         ):
             value = getattr(self, field_name)
             try:
@@ -150,6 +152,8 @@ class AudioEditClip:
             raise ValueError(f"Clip gain must be between {MIN_CLIP_GAIN_DB:g} and {MAX_CLIP_GAIN_DB:g} dB")
         if not -1.0 <= self.pan <= 1.0:
             raise ValueError("Clip pan must be between -1 (left) and 1 (right)")
+        if not -60 <= self.leveling_gain_db <= 60:
+            raise ValueError("Leveling gain must be between -60 and 60 dB")
         if not isinstance(self.processing, AudioEditProcessing):
             raise ValueError("Clip processing must be an AudioEditProcessing value")
         effects = tuple(self.effects)
