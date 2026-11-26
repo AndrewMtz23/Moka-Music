@@ -39,6 +39,7 @@ from ..services.audio_waveform_service import AudioWaveform, AudioWaveformError,
 from ..utils import themed_messagebox as messagebox
 from .audio_editor_layout import EditorLayoutMixin
 from .audio_editor_loop import EditorLoopMixin
+from .audio_editor_loudness import EditorLoudnessMixin
 from .audio_editor_projects import EditorProjectsMixin
 from .audio_editor_quick_trim import EditorQuickTrimMixin
 from .audio_editor_relink import EditorRelinkMixin, SourceHistoryState
@@ -57,6 +58,7 @@ class _ClipboardEntry:
 
 
 class AudioEditorDashboard(
+    EditorLoudnessMixin,
     EditorQuickTrimMixin,
     EditorRelinkMixin,
     EditorLoopMixin,
@@ -1792,7 +1794,12 @@ class AudioEditorDashboard(
                 kind, payload = self._render_results.get_nowait()
             except queue.Empty:
                 break
-            if kind == "progress" and isinstance(payload, tuple):
+            if kind == "level_complete":
+                self._complete_leveling(payload)
+            elif kind == "level_error":
+                self._finish_render()
+                self._status_var.set(self.translate("audio_editor.level_failed", error=payload))
+            elif kind == "progress" and isinstance(payload, tuple):
                 percent, phase = payload
                 self._status_var.set(self.translate("audio_editor.render_progress", percent=percent, phase=phase))
             elif kind == "cancelled":

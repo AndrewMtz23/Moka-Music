@@ -57,6 +57,18 @@ jobs:
             "exists=false" >> $env:GITHUB_OUTPUT
           }
 
+      - name: Validate release notes
+        if: github.event_name == 'push' || steps.release_tag.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          $notesPath = ".github/release-notes/${{ steps.version.outputs.tag }}.md"
+          if (!(Test-Path -LiteralPath $notesPath -PathType Leaf)) {
+            throw "Missing release notes: $notesPath"
+          }
+          if ([string]::IsNullOrWhiteSpace((Get-Content -LiteralPath $notesPath -Raw))) {
+            throw "Release notes must not be empty: $notesPath"
+          }
+
       - name: Create release tag
         if: github.event_name == 'workflow_run' && steps.release_tag.outputs.exists == 'false'
         run: |
@@ -109,6 +121,7 @@ jobs:
           files: MokaMusic-${{ steps.version.outputs.tag }}-windows.zip
           tag_name: ${{ steps.version.outputs.tag }}
           name: MokaMusic ${{ steps.version.outputs.tag }}
-          generate_release_notes: true
+          body_path: .github/release-notes/${{ steps.version.outputs.tag }}.md
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

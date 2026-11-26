@@ -13,12 +13,58 @@ from unittest.mock import Mock, patch
 from app.i18n import I18n
 from app.models.audio_edit_project import AudioEditClip, AudioEditMode, AudioEditTrack
 from app.services.audio_edit_service import export_audio_project
+from app.services.audio_loudness_service import LoudnessRecommendation
 from app.services.audio_waveform_service import AudioWaveform
 from app.ui.theme import THEME_PRESETS
 from app.views.audio_editor_dashboard import AudioEditorDashboard
 
 
 class QuickTrimTests(unittest.TestCase):
+    def test_leveling_worker_delivers_proposal_on_ui_thread(self):
+        e = self.editor
+        result = LoudnessRecommendation(-30, -20, 14)
+        with patch("app.views.audio_editor_loudness.analyze_clip_loudness", return_value=result) as analyze:
+            e._level_selected_clip()
+            e._render_thread.join(5)
+        self.assertFalse(e._render_thread.is_alive())
+        self.assertTrue(e._render_busy)
+        self.assertEqual(e._clips[0].leveling_gain_db, 0)
+        analyze.assert_called_once()
+        e.after_cancel(e._render_poll_id)
+        with patch("app.views.audio_editor_loudness.messagebox.askyesno", return_value=True):
+            e._poll_render_results()
+        self.assertFalse(e._render_busy)
+        self.assertEqual(e._clips[0].leveling_gain_db, 14)
+        e._clear_clip_leveling()
+        self.assertEqual(e._clips[0].leveling_gain_db, 0)
+
+    def test_leveling_proposal_applies_undoably_and_ignores_cancelled_result(self):
+        e = self.editor
+        before = e._project
+        result = LoudnessRecommendation(-30, -20, 14)
+        with patch("app.views.audio_editor_loudness.messagebox.askyesno", return_value=True):
+            e._complete_leveling((before, "a", result))
+        self.assertEqual(e._clips[0].leveling_gain_db, 14)
+        e._undo()
+        self.assertEqual(e._project, before)
+        e._render_cancel.set()
+        with patch("app.views.audio_editor_loudness.messagebox.askyesno") as ask:
+            e._complete_leveling((before, "a", result))
+        ask.assert_not_called()
+        self.assertEqual(e._project, before)
+
+    def test_leveling_decline_and_stale_results_do_not_edit(self):
+        e = self.editor
+        before = e._project
+        result = LoudnessRecommendation(-30, -20, 14)
+        with patch("app.views.audio_editor_loudness.messagebox.askyesno", return_value=False):
+            e._complete_leveling((before, "a", result))
+        self.assertEqual(e._project, before)
+        e._add_marker(4)
+        with patch("app.views.audio_editor_loudness.messagebox.askyesno") as ask:
+            e._complete_leveling((before, "a", result))
+        ask.assert_not_called()
+
     def test_context_removes_only_target_marker_and_supports_undo_redo(self):
         e = self.editor
         e.transient("")
