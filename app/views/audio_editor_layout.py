@@ -222,6 +222,7 @@ class EditorLayoutMixin:
                     "end_here": lambda: self._trim_at_cursor("right"),
                     "listen_start": lambda: self._audition_edge("left"),
                     "listen_end": lambda: self._audition_edge("right"),
+                    "level_volume": self._level_selected_clip,
                     "duplicate": self._duplicate_selected_clips,
                     "move": self._move_selected_clip_to_cursor,
                     "trim": self._trim_selected_clip,
@@ -387,6 +388,8 @@ class EditorLayoutMixin:
         self._section(content, "audio_editor.effects_section", 13)
         self._property_action(content, "audio_editor.processing_title", self._edit_clip_processing, 14)
         self._property_action(content, "audio_editor.fx_title", self._edit_clip_effects, 15)
+        self._property_action(content, "audio_editor.level_volume", self._level_selected_clip, 16)
+        self._property_action(content, "audio_editor.clear_leveling", self._clear_clip_leveling, 17)
         self._track_controls = ttk.Frame(tabs, padding=12, style="Editor.Panel.TFrame")
         tabs.add(self._track_controls, text=self.translate("audio_editor.track_tab"))
         self._track_controls.columnconfigure(0, weight=1)
@@ -532,7 +535,7 @@ class EditorLayoutMixin:
             return True
         if action == "paste":
             return bool(self._clipboard)
-        if action in ("start_here", "end_here", "listen_start", "listen_end"):
+        if action in ("start_here", "end_here", "listen_start", "listen_end", "level_volume"):
             return self._quick_trim_clip() is not None
         selected = self._selected_clip_entries()
         if not selected:

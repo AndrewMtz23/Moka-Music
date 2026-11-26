@@ -603,6 +603,7 @@ class AudioTimeline(TimelineRegionMixin, TimelineFadeMixin, TimelineInteractionM
                 ("end_here", "audio_editor.end_here"),
                 ("listen_start", "audio_editor.listen_start"),
                 ("listen_end", "audio_editor.listen_end"),
+                ("level_volume", "audio_editor.level_volume"),
             ]
             if len(self.selected_clip_ids) > 1:
                 actions.extend(
